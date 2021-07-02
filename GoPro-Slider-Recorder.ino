@@ -21,7 +21,7 @@
 
 #include "BluefruitConfig.h"
 
-#define VERSION "0.2 2021-05-10"
+#define VERSION "0.3 2021-07-02"
 
 SoftwareSerial espSerial(5, 4);
 int iESP8266Byte = 0;
@@ -83,7 +83,10 @@ Adafruit_StepperMotor *motor = AFMS.getStepper(200, 2);
 // Setup function - runs once at startup -----------------------------------
 void setup(void) {
   Serial.begin(115200);
-  espSerial.begin(115200);
+  
+//  espSerial.begin(115200);
+  espSerial.begin(9600);
+
   delay(5000);
   Serial.println("");
   Serial.println(F("GoPro Slider Recorder"));
@@ -224,7 +227,9 @@ void loop(void)
               {
                 Serial.println(F("Record Video STOP"));
                 if (iGoProEnabled)
+                {
                   espSerial.print("0");
+                }
                 iRecording = false;
                 digitalWrite(LED_BUILTIN, LOW);
               }
@@ -294,17 +299,32 @@ void loop(void)
   case STATE_RECORDING_CELL_3:   
     if (iRecording == false)
     {
-      Serial.print("Record Video");
+      Serial.println("Record Video");
       if (iGoProEnabled)
       {
+        // Clear out any left over characters
+        while (espSerial.available() != 0)
+        {
+          iESP8266Byte = espSerial.read();
+        }
+        
         espSerial.print("1");
         int iCnt = 0;
         while (espSerial.available() == 0)
         {
-          if (((iCnt++) % 100) == 0)
-            Serial.print("*");
+          delay(100);
+          //if (((iCnt++) % 100) == 0)
+            //Serial.print("*");
         }
         iESP8266Byte = espSerial.read();
+#if 0
+        Serial.println("#########");
+        Serial.print("#### ");
+        Serial.print(iESP8266Byte,HEX);
+        Serial.println("#### ");
+        Serial.println("#########");
+        iESP8266Byte = '1';
+#endif
       }
       else
       {
@@ -330,7 +350,9 @@ void loop(void)
       {
         Serial.println(F("Record Video STOP"));
         if (iGoProEnabled)
+        {
           espSerial.print("0");
+        }
         iRecording = false;
         digitalWrite(LED_BUILTIN, LOW);
         if (iState == STATE_RECORDING_CELL_1)
