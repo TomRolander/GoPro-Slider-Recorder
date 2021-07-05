@@ -1,3 +1,20 @@
+/**************************************************************************
+  GoPro Slider Recorder
+
+  Original Code:  2021-05-10
+
+  Tom Rolander, MSEE
+  Mentor, Circuit Design & Software
+  Miller Library, Fabrication Lab
+  Hopkins Marine Station, Stanford University,
+  120 Ocean View Blvd, Pacific Grove, CA 93950
+  +1 831.915.9526 | rolander@stanford.edu
+
+ **************************************************************************/
+
+#define PROGRAM "GoPro Slider Recorder"
+#define VERSION "Ver 0.4 2021-07-05"
+
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
 //
@@ -12,6 +29,7 @@
 // Use Adafruit Bluefruit LE app for iOS or Android to control timing.
 // Buttons 1-4 select interpolation mode (linear vs. various ease in/out).
 // Up/down select speed. Left = home. Right = start slider.
+
 #include <SPI.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>
@@ -21,7 +39,6 @@
 
 #include "BluefruitConfig.h"
 
-#define VERSION "0.3 2021-07-02"
 
 SoftwareSerial espSerial(5, 4);
 int iESP8266Byte = 0;
@@ -89,9 +106,8 @@ void setup(void) {
 
   delay(5000);
   Serial.println("");
-  Serial.println(F("GoPro Slider Recorder"));
-  Serial.print("Ver ");
-  Serial.println(VERSION);
+  Serial.println(F(PROGRAM));
+  Serial.println(F(VERSION));
   
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH); // LED steady on during init
@@ -254,14 +270,27 @@ void loop(void)
         
       }
       else
+      if (ble.buffer[0] == '8')
+      {
+        ble.buffer[0] = ble.buffer[1];
+        ble.buffer[1] = 0;
+        espSerial.print(ble.buffer);
+        SendString_ble("Sending GoPro Command: ");
+        SendString_ble(ble.buffer);
+        SendString_ble("\\n");
+      }
+      else
       {
         bUnrecognizedCommand = true;
       }
 
       if (bUnrecognizedCommand)
       {
-        Serial.print("Unrecognized command: "); Serial.println(ble.buffer);
-        SendString_ble("Unrecognized command: "); SendString_ble(ble.buffer); SendString_ble("\\n");        
+        Serial.print(F("Unrecognized command: "));
+        Serial.println(ble.buffer);
+        SendString_ble("Unrecognized command: ");
+        SendString_ble(ble.buffer);
+        SendString_ble("\\n");        
         HelpDisplay();
       }
     }
@@ -299,7 +328,7 @@ void loop(void)
   case STATE_RECORDING_CELL_3:   
     if (iRecording == false)
     {
-      Serial.println("Record Video");
+      Serial.println(F("Record Video"));
       if (iGoProEnabled)
       {
         // Clear out any left over characters
@@ -392,7 +421,7 @@ void loop(void)
         motor->step(iSteps, iDirection, SINGLE); 
         motor->release(); 
         lStartTimeMS = millis();
-        Serial.print("Move Start Time MS = ");
+        Serial.print(F("Move Start Time MS = "));
         Serial.println(lStartTimeMS);
       }
     }
@@ -465,5 +494,6 @@ void HelpDisplay()
   SendString_ble("  06 Recording time 5 min\\n");
   SendString_ble("  07 Disable GoPro, slider only\\n");
   SendString_ble("  08 Enable GoPro\\n");
+  SendString_ble("  8x Send 'x' GoPro Command\\n");
   SendString_ble("  99 Abort recording cells\\n");    
 }
