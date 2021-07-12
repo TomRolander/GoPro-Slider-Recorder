@@ -102,8 +102,8 @@ Adafruit_StepperMotor *motor = AFMS.getStepper(200, 2);
 void setup(void) {
   Serial.begin(9600);
   
-  y_axisSerial.begin(9600);
-  espSerial.begin(9600);
+  y_axisSerial.begin(1200);
+  espSerial.begin(1200);
 
   delay(5000);
   Serial.println("");
