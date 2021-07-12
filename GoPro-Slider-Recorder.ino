@@ -39,6 +39,7 @@
 
 #include "BluefruitConfig.h"
 
+SoftwareSerial y_axisSerial(10, 9);
 
 SoftwareSerial espSerial(5, 4);
 int iESP8266Byte = 0;
@@ -101,7 +102,7 @@ Adafruit_StepperMotor *motor = AFMS.getStepper(200, 2);
 void setup(void) {
   Serial.begin(115200);
   
-//  espSerial.begin(115200);
+  y_axisSerial.begin(9600);
   espSerial.begin(9600);
 
   delay(5000);
@@ -231,6 +232,26 @@ void loop(void)
             SendString_ble("Enable GoPro\\n");
             Serial.println(F("Enable GoPro"));
             iGoProEnabled = true;
+            break;
+          case 9:
+            SendString_ble("Forward cellplate row\\n");
+            Serial.println(F("Forward cellplate row"));
+            y_axisSerial.print('F');
+            while (y_axisSerial.available() == 0)
+              ;
+            char cForword = y_axisSerial.read();    
+            Serial.print("RET = ");
+            Serial.println(cForword);
+            break;
+          case 10:
+            SendString_ble("Backward cellplate row\\n");
+            Serial.println(F("Backward cellplate row"));
+            y_axisSerial.print('B');
+            while (y_axisSerial.available() == 0)
+              ;
+            char cBackword = y_axisSerial.read();    
+            Serial.print("RET = ");
+            Serial.println(cBackword);
             break;
             
           case 99:  // Abort Recording cells
@@ -494,6 +515,8 @@ void HelpDisplay()
   SendString_ble("  06 Recording time 5 min\\n");
   SendString_ble("  07 Disable GoPro, slider only\\n");
   SendString_ble("  08 Enable GoPro\\n");
+  SendString_ble("  09 Forward cellplate row\\n");
+  SendString_ble("  10 Backward cellplate row\\n");
   SendString_ble("  8x Send 'x' GoPro Command\\n");
   SendString_ble("  99 Abort recording cells\\n");    
 }
