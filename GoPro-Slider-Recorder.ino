@@ -39,7 +39,7 @@
 
 #include "BluefruitConfig.h"
 
-SoftwareSerial y_axisSerial(10, 9);
+SoftwareSerial y_axisSerial(3, 2);
 
 SoftwareSerial espSerial(5, 4);
 int iESP8266Byte = 0;
@@ -100,7 +100,7 @@ Adafruit_StepperMotor *motor = AFMS.getStepper(200, 2);
 
 // Setup function - runs once at startup -----------------------------------
 void setup(void) {
-  Serial.begin(115200);
+  Serial.begin(9600);
   
   y_axisSerial.begin(9600);
   espSerial.begin(9600);
@@ -236,22 +236,34 @@ void loop(void)
           case 9:
             SendString_ble("Forward cellplate row\\n");
             Serial.println(F("Forward cellplate row"));
-            y_axisSerial.print('F');
+
+            Serial.println("Sending 'F' command");
+            y_axisSerial.print("F");
+
+            delay(10000);
+
+#if 0            
+            Serial.println("Wait for completion.");
             while (y_axisSerial.available() == 0)
               ;
             char cForword = y_axisSerial.read();    
             Serial.print("RET = ");
             Serial.println(cForword);
+#endif            
             break;
           case 10:
             SendString_ble("Backward cellplate row\\n");
             Serial.println(F("Backward cellplate row"));
             y_axisSerial.print('B');
+
+            delay(10000);
+#if 0            
             while (y_axisSerial.available() == 0)
               ;
             char cBackword = y_axisSerial.read();    
             Serial.print("RET = ");
             Serial.println(cBackword);
+#endif            
             break;
             
           case 99:  // Abort Recording cells
