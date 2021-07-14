@@ -13,7 +13,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
-#define VERSION "Ver 0.5 2021-07-12"
+#define VERSION "Ver 0.6 2021-07-14"
 
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
@@ -48,13 +48,15 @@ int iRecording = false;
 int iPosition = 0;
 int iCell = 0;
 
+int iRow = 0;
+
 long lStartTimeMS = 0;
 
 int iSteps = 0;
 int iDirection = 0;
 
-int iMaxCells = 9;  // 3 well plates at 3 cells per well plate
-int iWellPlates = 3;
+int iMaxCells = 3;  // 1 well plates at 3 cells per well plate row
+int iWellPlates = 1;
 
 #define RECORDING_TIME_5_SEC 5000
 #define RECORDING_TIME_3_MIN 180000
@@ -68,8 +70,11 @@ long iTimeDelay = DEFAULT_RECORDING_TIME_MS;
 long iCurrentTimeDelay = DEFAULT_RECORDING_TIME_MS;
 char sRecordingTime[32] = RECORDING_TIME_5_SEC_STRING;
 
-#define DEFAULT_CELL_STEP_SIZE 116
-#define DEFAULT_GAP_STEP_SIZE (116+30)
+//#define DEFAULT_CELL_STEP_SIZE 116
+//#define DEFAULT_GAP_STEP_SIZE (116+30)
+
+#define DEFAULT_CELL_STEP_SIZE 110
+#define DEFAULT_GAP_STEP_SIZE (110+30)
 
 #define STATE_READY             0
 #define STATE_RECORDING_CELL_1  1
@@ -456,6 +461,32 @@ void loop(void)
         lStartTimeMS = millis();
         Serial.print(F("Move Start Time MS = "));
         Serial.println(lStartTimeMS);
+
+        if (iDirection == BACKWARD)
+        {
+            SendString_ble("Forward cellplate row\\n");
+            Serial.println(F("Forward cellplate row"));
+
+            iRow++;
+            if (iRow == 1)
+            {
+              Serial.println("Sending 'F' command");
+              y_axisSerial.print("F");
+              iState = STATE_RECORDING_CELL_1;
+            }
+            else
+            if (iRow == 2)
+            {
+              Serial.println("Sending 'B' command");
+              y_axisSerial.print("B");
+              iState = STATE_READY;
+              iRow = 0;
+           }
+            delay(10000);
+            iPosition = 0;
+            iCell = 0;           
+
+        }
       }
     }
     
