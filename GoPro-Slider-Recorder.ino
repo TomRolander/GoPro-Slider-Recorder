@@ -58,6 +58,23 @@ int iDirection = 0;
 int iMaxCells = 3;  // 1 well plates at 3 cells per well plate row
 int iWellPlates = 1;
 
+int iXaxis = 0;
+int iYaxis = 0;
+int iWellPlate = 1;
+
+#if 0
+struct WellplateCoord
+{
+  int x;
+  int y;
+};
+
+static struct WellplateCoord WellplatesCoords[6] =
+  { 
+    {0.0}
+  };
+#endif
+
 #define RECORDING_TIME_5_SEC 5000
 #define RECORDING_TIME_3_MIN 180000
 #define RECORDING_TIME_5_MIN 300000
@@ -242,7 +259,7 @@ void loop(void)
             SendString_ble("Forward cellplate row\\n");
             Serial.println(F("Forward cellplate row"));
 
-            Serial.println("Sending 'F' command");
+            Serial.println(F("Sending 'F' command"));
             y_axisSerial.print("F");
 
             delay(10000);
@@ -316,6 +333,108 @@ void loop(void)
         SendString_ble("Sending GoPro Command: ");
         SendString_ble(ble.buffer);
         SendString_ble("\\n");
+      }
+      else
+      if (ble.buffer[0] == 'F' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      {
+        SendString_ble("Forward Y-axis\\n");
+        SendString_ble(&ble.buffer[1]);
+        SendString_ble("\\n");
+        Serial.print(F("Forward Y-axis "));
+        Serial.println(&ble.buffer[1]);
+
+        Serial.println(F("Sending 'F' command"));
+        y_axisSerial.print(ble.buffer);
+//        y_axisSerial.print("F");
+
+        delay(10000);
+      }
+      else
+      if (ble.buffer[0] == 'B' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      {
+        SendString_ble("Backward Y-axis\\n");
+        Serial.println(F("Backward Y-axis"));
+
+        Serial.println(F("Sending 'B' command"));
+        y_axisSerial.print(ble.buffer);
+//        y_axisSerial.print("B");
+
+        delay(10000);
+      }
+      else
+      if (ble.buffer[0] == 'L' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      {
+        iSteps = (ble.buffer[1]-'0') * 100;
+        iSteps += (ble.buffer[2]-'0') * 10;
+        iSteps += (ble.buffer[3]-'0'); 
+        
+        SendString_ble("Forward X-axis\\n");
+        Serial.print(F("Forward X-axis "));
+        Serial.println(iSteps);
+
+        motor->step(iSteps, FORWARD, SINGLE); 
+        motor->release(); 
+
+        delay(10000);
+      }
+      else
+      if (ble.buffer[0] == 'R' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      {
+        iSteps = (ble.buffer[1]-'0') * 100;
+        iSteps += (ble.buffer[2]-'0') * 10;
+        iSteps += (ble.buffer[3]-'0'); 
+        
+        SendString_ble("Backward X-axis\\n");
+        Serial.print(F("Backward X-axis "));
+        Serial.println(iSteps);
+
+        motor->step(iSteps, BACKWARD, SINGLE); 
+        motor->release(); 
+
+        delay(10000);
+      }
+      else
+      if (ble.buffer[0] == 'W' && isDigit(ble.buffer[1]))
+      {
+        int iNextWellplate = (ble.buffer[3]-'0'); 
+
+        /*
+         * 1 000,000
+         * 2 360,000
+         * 3 720,000
+         * 4 000,258
+         * 5 360,258
+         * 6 720,258
+         */
+        
+        if (iNextWellplate != iWellPlate && iNextWellplate > 0 && iNextWellplate < 7)
+        {
+          if (iNextWellplate < 4 && iYaxis != 0)
+          {
+            y_axisSerial.print("B258");
+            delay(10000);
+            iYaxis = 0;
+          }
+          else
+          if (iNextWellplate > 3 && iYaxis == 0)
+          {
+            y_axisSerial.print("F258");
+            delay(10000);
+            iYaxis = 258;
+          }
+          int iNextXaxis = ((iNextWellplate-1) % 3) * 360;
+          if (iNextXaxis != iXaxis)
+          {
+            if (iNextXaxis > iXaxis)
+              motor->step(iNextXaxis-iXaxis, FORWARD, SINGLE); 
+            else
+              motor->step(iXaxis-iNextXaxis, BACKWARD, SINGLE); 
+            motor->release(); 
+            iXaxis = iNextXaxis;      
+          }
+        }
+        
+        delay(10000);
       }
       else
       {
@@ -470,19 +589,19 @@ void loop(void)
             iRow++;
             if (iRow == 1)
             {
-              Serial.println("Sending 'F' command");
-              y_axisSerial.print("F");
+              Serial.println(F("Sending 'F' command"));
+              y_axisSerial.print("F114");
               iState = STATE_RECORDING_CELL_1;
             }
             else
             if (iRow == 2)
             {
-              Serial.println("Sending 'B' command");
-              y_axisSerial.print("B");
+              Serial.println(F("Sending 'B' command"));
+              y_axisSerial.print("B114");
               iState = STATE_READY;
               iRow = 0;
            }
-            delay(10000);
+            delay(3000);
             iPosition = 0;
             iCell = 0;           
 
