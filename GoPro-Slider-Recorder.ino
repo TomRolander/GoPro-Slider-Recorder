@@ -205,62 +205,62 @@ void loop(void)
         switch(iCommand)
         {
           case 0: // Start Recording cells
-            SendString_ble("Start recording cells\\n");
+            //SendString_ble("Start recording cells\\n");
             Serial.println(F("Start recording cells"));
             break;
             
           case 1: 
-            SendString_ble("1 Well Plate with 3 cells\\n");
+            //SendString_ble("1 Well Plate with 3 cells\\n");
             Serial.println(F("1 Well Plate with 3 cells"));
             iWellPlates = 1;
             iMaxCells = 3;
             break;
           case 2: 
-            SendString_ble("2 Well Plates with 6 cells\\n");
+            //SendString_ble("2 Well Plates with 6 cells\\n");
             Serial.println(F("2 Well Plates with 6 cells"));
             iWellPlates = 2;
             iMaxCells = 6;
             break;
           case 3: 
-            SendString_ble("3 Well Plates with 9 cells\\n");
+            //SendString_ble("3 Well Plates with 9 cells\\n");
             Serial.println(F("3 Well Plates with 9 cells"));
             iWellPlates = 3;
             iMaxCells = 9;
             break;
           case 4: 
-            SendString_ble("Recording time 5 sec\\n");
+            //SendString_ble("Recording time 5 sec\\n");
             Serial.println(F("Recording time 5 sec"));
             iCurrentTimeDelay = RECORDING_TIME_5_SEC;
             strcpy(sRecordingTime, RECORDING_TIME_5_SEC_STRING);
             break;
           case 5: 
-            SendString_ble("Recording time 3 min\\n");
+            //SendString_ble("Recording time 3 min\\n");
             Serial.println(F("Recording time 3 min"));
             iCurrentTimeDelay = RECORDING_TIME_3_MIN;
             strcpy(sRecordingTime, RECORDING_TIME_3_MIN_STRING);
             break;
           case 6: 
-            SendString_ble("Recording time 5 min\\n");
+            //SendString_ble("Recording time 5 min\\n");
             Serial.println(F("Recording time 5 min"));
             iCurrentTimeDelay = RECORDING_TIME_5_MIN;
             strcpy(sRecordingTime, RECORDING_TIME_5_MIN_STRING);
             break;
           case 7:
-            SendString_ble("Disable GoPro, slider only\\n");
+            //SendString_ble("Disable GoPro, slider only\\n");
             Serial.println(F("Disable GoPro, slider only"));
             iGoProEnabled = false;
             break;
           case 8:
-            SendString_ble("Enable GoPro\\n");
+            //SendString_ble("Enable GoPro\\n");
             Serial.println(F("Enable GoPro"));
             iGoProEnabled = true;
             break;
           case 9:
-            SendString_ble("Forward cellplate row\\n");
+            //SendString_ble("Forward cellplate row\\n");
             Serial.println(F("Forward cellplate row"));
 
             Serial.println(F("Sending 'F' command"));
-            y_axisSerial.print("F");
+            y_axisSerial.print("F258");
 
             delay(10000);
 
@@ -274,9 +274,9 @@ void loop(void)
 #endif            
             break;
           case 10:
-            SendString_ble("Backward cellplate row\\n");
+            //SendString_ble("Backward cellplate row\\n");
             Serial.println(F("Backward cellplate row"));
-            y_axisSerial.print('B');
+            y_axisSerial.print("B258");
 
             delay(10000);
 #if 0            
@@ -291,7 +291,7 @@ void loop(void)
           case 99:  // Abort Recording cells
             if (iProcessing)
             {
-              SendString_ble("Abort recording cells\\n");
+              //SendString_ble("Abort recording cells\\n");
               Serial.println(F("Abort recording cells"));
               iProcessing = false;
               if (iRecording)
@@ -313,7 +313,7 @@ void loop(void)
             }
             else
             {
-              SendString_ble("Not recording cells\\n");
+              //SendString_ble("Not recording cells\\n");
               Serial.println(F("Not recording cells"));
             }
             break;
@@ -325,21 +325,24 @@ void loop(void)
         
       }
       else
+#if 1
       if (ble.buffer[0] == '8')
       {
         ble.buffer[0] = ble.buffer[1];
         ble.buffer[1] = 0;
         espSerial.print(ble.buffer);
-        SendString_ble("Sending GoPro Command: ");
-        SendString_ble(ble.buffer);
-        SendString_ble("\\n");
+        Serial.print("Sending GoPro Command: ");
+        Serial.println(ble.buffer);
+        //SendString_ble("Sending GoPro Command: ");
+        //SendString_ble(ble.buffer);
+        //SendString_ble("\\n");
       }
       else
       if (ble.buffer[0] == 'F' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
       {
-        SendString_ble("Forward Y-axis\\n");
-        SendString_ble(&ble.buffer[1]);
-        SendString_ble("\\n");
+        //SendString_ble("Forward Y-axis\\n");
+        //SendString_ble(&ble.buffer[1]);
+        //SendString_ble("\\n");
         Serial.print(F("Forward Y-axis "));
         Serial.println(&ble.buffer[1]);
 
@@ -352,7 +355,7 @@ void loop(void)
       else
       if (ble.buffer[0] == 'B' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
       {
-        SendString_ble("Backward Y-axis\\n");
+        //SendString_ble("Backward Y-axis\\n");
         Serial.println(F("Backward Y-axis"));
 
         Serial.println(F("Sending 'B' command"));
@@ -368,7 +371,7 @@ void loop(void)
         iSteps += (ble.buffer[2]-'0') * 10;
         iSteps += (ble.buffer[3]-'0'); 
         
-        SendString_ble("Forward X-axis\\n");
+        //SendString_ble("Forward X-axis\\n");
         Serial.print(F("Forward X-axis "));
         Serial.println(iSteps);
 
@@ -384,7 +387,7 @@ void loop(void)
         iSteps += (ble.buffer[2]-'0') * 10;
         iSteps += (ble.buffer[3]-'0'); 
         
-        SendString_ble("Backward X-axis\\n");
+        //SendString_ble("Backward X-axis\\n");
         Serial.print(F("Backward X-axis "));
         Serial.println(iSteps);
 
@@ -396,8 +399,14 @@ void loop(void)
       else
       if (ble.buffer[0] == 'W' && isDigit(ble.buffer[1]))
       {
-        int iNextWellplate = (ble.buffer[3]-'0'); 
-
+        int iNextWellplate = (ble.buffer[1]-'0'); 
+Serial.println("");        
+Serial.print(F("iNextWellplate = "));
+Serial.println(iNextWellplate);
+Serial.println(F("BEFORE"));
+Serial.println(iWellPlate);
+Serial.println(iXaxis);
+Serial.println(iYaxis);
         /*
          * 1 000,000
          * 2 360,000
@@ -432,11 +441,17 @@ void loop(void)
             motor->release(); 
             iXaxis = iNextXaxis;      
           }
+          iWellPlate = iNextWellplate;
+Serial.println(F("AFTER"));
+Serial.println(iWellPlate);
+Serial.println(iXaxis);
+Serial.println(iYaxis);
         }
         
         delay(10000);
       }
       else
+#endif
       {
         bUnrecognizedCommand = true;
       }
