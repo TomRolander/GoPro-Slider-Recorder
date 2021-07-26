@@ -69,16 +69,14 @@ struct WellplateCoord
   int x;
   int y;
 };
-
-        /*
-         * 1 000,000
-         * 2 360,000
-         * 3 720,000
-         * 4 000,258
-         * 5 360,258
-         * 6 720,258
-         */
-
+  /*
+   * 1 000,000
+   * 2 360,000
+   * 3 720,000
+   * 4 000,258
+   * 5 360,258
+   * 6 720,258
+   */
 static struct WellplateCoord WellplatesCoords[6] =
   { 
     {  0,  0},
@@ -115,6 +113,8 @@ char sRecordingTime[32] = RECORDING_TIME_5_SEC_STRING;
 #define STATE_MOVING_TO_CELL_3  4
 #define STATE_RECORDING_CELL_3  5
 #define STATE_MOVING_TO_CELL_1  6
+
+#define STATE_WAITING_FOR_COMPLETION 7
 
 int iState = STATE_READY;
 
@@ -451,6 +451,9 @@ Serial.println(iNextWellplateCell);
   {
     iShowCommand = true;
   }
+
+//Serial.print("STATE = ");
+//Serial.println(iState);
   
   switch(iState)
   {
@@ -637,7 +640,16 @@ Serial.println(iNextWellplateCell);
 //      Serial.println(lStartTimeMS);
     }
     break;
-    
+
+    case STATE_WAITING_FOR_COMPLETION:    
+      if (y_axisSerial.available() != 0)
+      {
+        char cForword = y_axisSerial.read();    
+        Serial.print("RET = ");
+        Serial.println(cForword);
+        iState = STATE_READY;    
+      }
+    break;
   }
   delay(250);
   //Serial.println(iState);
@@ -688,6 +700,7 @@ void HelpDisplay()
 
 void MoveGoPro(int iNextXaxis, int iNextYaxis)
 {
+  int iVal = 0;
 Serial.println(F("BEFORE"));
 Serial.print(iWellplate);
 Serial.print("-");
@@ -695,15 +708,24 @@ Serial.println(iWellplateCell);
 Serial.println(iXaxis);
 Serial.println(iYaxis);
 
+  SendString_ble_F(F("->Moving... please wait\\n"));    
+
+  iVal = 0;
   if (iNextXaxis > iXaxis)
-    motor->step(iNextXaxis-iXaxis, FORWARD, SINGLE); 
+  {
+    iVal = iNextXaxis-iXaxis;
+    motor->step(iVal, FORWARD, SINGLE); 
+  }
   else
   if (iNextXaxis < iXaxis)
-    motor->step(iXaxis-iNextXaxis, BACKWARD, SINGLE); 
-  motor->release(); 
+  {
+    iVal = iXaxis-iNextXaxis;
+    motor->step(iVal, BACKWARD, SINGLE); 
+  }
+  motor->release();
   
   char sParam[5] = "X000";
-  int iVal = 0;
+  iVal = 0;
   if (iNextYaxis > iYaxis)
   {
     sParam [0] = 'F';
@@ -723,6 +745,12 @@ Serial.println(sParam);
   if (iVal != 0)
   {
     y_axisSerial.print(sParam);
+
+    //Serial.println("Wait for completion.");
+    //iState = STATE_WAITING_FOR_COMPLETION;
+
+    unsigned long ulDelayMS = (((unsigned long)iVal)/5L) * 1000L;
+    delay(ulDelayMS);
   }          
 
   iXaxis = iNextXaxis;
@@ -734,5 +762,5 @@ Serial.println(iWellplateCell);
 Serial.println(iXaxis);
 Serial.println(iYaxis);
 
-  delay(5000);
+  //delay(5000);
 }
