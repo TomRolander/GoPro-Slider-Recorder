@@ -125,7 +125,7 @@ int iShowCommand = true;
 int iGoProEnabled = true;
 
 
-//char sExecuteScript[256] = "";
+char sExecuteScript[64] = "";
 
 
 // Bluefruit config --------------------------------------------------------
@@ -416,9 +416,105 @@ void loop(void)
           int iNextXaxis = (((iNextWellplate-1) % 3) * 360) + (((iNextWellplateCell-1) % 3) * 110);
           int iNextYaxis = ((iNextWellplate/4) * 258) + ((iNextWellplateCell/4) * 114);
 
+          MoveGoPro(iNextXaxis, iNextYaxis);
           iWellplate = iNextWellplate;
           iWellplateCell = iNextWellplateCell;
-          MoveGoPro(iNextXaxis, iNextYaxis);
+        }
+      }
+      else
+      if (chCommand == 'X' && ble.buffer[1] == '=')
+      {
+        strcpy(sExecuteScript, &ble.buffer[2]);
+        strupr(sExecuteScript);
+        Serial.println(sExecuteScript); 
+
+        int iLen = strlen(sExecuteScript);
+        for (int i=0; i<iLen; i=i+6)
+        {
+          int iNextWellplate = (sExecuteScript[i+1]-'0'); 
+          int iNextWellplateCell; 
+
+          if (sExecuteScript[i+3] == '1')
+          {
+            if (sExecuteScript[i+4] == 'F')
+              iNextWellplateCell = 1;
+            else
+              iNextWellplateCell = 3;
+          }
+          else
+          {
+            if (sExecuteScript[i+4] == 'F')
+              iNextWellplateCell = 4;
+            else
+              iNextWellplateCell = 6;
+          }
+          
+          for (iCell=0; iCell<3; iCell++)
+          {
+            int iNextXaxis = (((iNextWellplate-1) % 3) * 360) + (((iNextWellplateCell-1) % 3) * 110);
+            int iNextYaxis = ((iNextWellplate/4) * 258) + ((iNextWellplateCell/4) * 114);
+  
+            MoveGoPro(iNextXaxis, iNextYaxis);
+            iWellplate = iNextWellplate;
+            iWellplateCell = iNextWellplateCell;
+
+Serial.print(iWellplate);
+Serial.print("-");
+Serial.println(iWellplateCell);
+Serial.println("RECORD Beg");
+
+            if (iGoProEnabled)
+            {
+              // Clear out any left over characters
+              while (espSerial.available() != 0)
+              {
+                iESP8266Byte = espSerial.read();
+              }
+              
+              espSerial.print("1");
+              int iCnt = 0;
+              while (espSerial.available() == 0)
+              {
+                delay(100);
+                //if (((iCnt++) % 100) == 0)
+                  //Serial.print("*");
+              }
+              iESP8266Byte = espSerial.read();
+            }
+            else
+            {
+              iESP8266Byte = '1';
+            }
+            if (iESP8266Byte == '1')
+            {
+              Serial.println(F(" START"));
+              iRecording = true;
+              digitalWrite(LED_BUILTIN, HIGH);
+
+              delay(iCurrentTimeDelay);
+              
+              Serial.println(F("Record Video STOP"));
+              if (iGoProEnabled)
+              {
+                espSerial.print("0");
+              }
+            }
+            else
+            {
+              SendString_ble_F(F("\\n*** Record Video FAILED ***\\n"));
+              Serial.println(F(" FAILED"));
+            }      
+
+
+             
+delay(5000);
+Serial.println("RECORD End");
+
+            if (sExecuteScript[i+4] == 'F')
+              iNextWellplateCell++;
+            else            
+              iNextWellplateCell--;
+          }
         }
       }
       else
