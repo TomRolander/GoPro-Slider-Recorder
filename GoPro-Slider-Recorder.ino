@@ -89,12 +89,14 @@ static struct WellplateCoord WellplatesCoords[6] =
 #endif
 
 #define RECORDING_TIME_5_SEC 5000
-#define RECORDING_TIME_3_MIN 180000
-#define RECORDING_TIME_5_MIN 300000
+#define RECORDING_TIME_3_MIN 180000L
+#define RECORDING_TIME_5_MIN 300000L
 #define RECORDING_TIME_5_SEC_STRING "5 Sec"
 #define RECORDING_TIME_3_MIN_STRING "3 Min"
 #define RECORDING_TIME_5_MIN_STRING "5 Min"
 #define DEFAULT_RECORDING_TIME_MS RECORDING_TIME_5_SEC
+
+#define GOPRO_CONNECT_TIMEOUT 30000L
 
 long iTimeDelay = DEFAULT_RECORDING_TIME_MS;
 long iCurrentTimeDelay = DEFAULT_RECORDING_TIME_MS;
@@ -125,7 +127,7 @@ int iShowCommand = true;
 int iGoProEnabled = true;
 
 
-char sExecuteScript[64] = "";
+char sExecuteScript[128] = "";
 
 
 // Bluefruit config --------------------------------------------------------
@@ -365,7 +367,7 @@ void loop(void)
         iSteps += (ble.buffer[2]-'0') * 10;
         iSteps += (ble.buffer[3]-'0');
 
-        MoveGoPro(iXaxis, iYaxis + iSteps);
+        MoveGoPro(iXaxis, iYaxis + iSteps, true);
       }
       else
       if (chCommand == 'B' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
@@ -374,7 +376,7 @@ void loop(void)
         iSteps += (ble.buffer[2]-'0') * 10;
         iSteps += (ble.buffer[3]-'0'); 
 
-        MoveGoPro(iXaxis, iYaxis - iSteps);
+        MoveGoPro(iXaxis, iYaxis - iSteps, true);
       }
       else
       if (chCommand == 'L' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
@@ -383,7 +385,7 @@ void loop(void)
         iSteps += (ble.buffer[2]-'0') * 10;
         iSteps += (ble.buffer[3]-'0'); 
         
-        MoveGoPro(iXaxis + iSteps, iYaxis);
+        MoveGoPro(iXaxis + iSteps, iYaxis, true);
       }
       else
       if (chCommand == 'R' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
@@ -392,17 +394,15 @@ void loop(void)
         iSteps += (ble.buffer[2]-'0') * 10;
         iSteps += (ble.buffer[3]-'0'); 
         
-        MoveGoPro(iXaxis - iSteps, iYaxis);
+        MoveGoPro(iXaxis - iSteps, iYaxis, true);
       }
       else
       if (chCommand == 'W' && isDigit(ble.buffer[1]))
       {
         int iNextWellplate = (ble.buffer[1]-'0'); 
         
-        MoveGoPro(WellplatesCoords[iNextWellplate-1].x,WellplatesCoords[iNextWellplate-1].y);
+        MoveGoPro(WellplatesCoords[iNextWellplate-1].x,WellplatesCoords[iNextWellplate-1].y, true);
         iWellplate = iNextWellplate;
-
-        //delay(10000);
       }
       else
       if (chCommand == 'C' && ble.buffer[2] == '-' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[3]))
@@ -416,7 +416,7 @@ void loop(void)
           int iNextXaxis = (((iNextWellplate-1) % 3) * 360) + (((iNextWellplateCell-1) % 3) * 110);
           int iNextYaxis = ((iNextWellplate/4) * 258) + ((iNextWellplateCell/4) * 114);
 
-          MoveGoPro(iNextXaxis, iNextYaxis);
+          MoveGoPro(iNextXaxis, iNextYaxis, true);
           iWellplate = iNextWellplate;
           iWellplateCell = iNextWellplateCell;
         }
@@ -424,98 +424,7 @@ void loop(void)
       else
       if (chCommand == 'X' && ble.buffer[1] == '=')
       {
-        strcpy(sExecuteScript, &ble.buffer[2]);
-        strupr(sExecuteScript);
-        Serial.println(sExecuteScript); 
-
-        int iLen = strlen(sExecuteScript);
-        for (int i=0; i<iLen; i=i+6)
-        {
-          int iNextWellplate = (sExecuteScript[i+1]-'0'); 
-          int iNextWellplateCell; 
-
-          if (sExecuteScript[i+3] == '1')
-          {
-            if (sExecuteScript[i+4] == 'F')
-              iNextWellplateCell = 1;
-            else
-              iNextWellplateCell = 3;
-          }
-          else
-          {
-            if (sExecuteScript[i+4] == 'F')
-              iNextWellplateCell = 4;
-            else
-              iNextWellplateCell = 6;
-          }
-          
-          for (iCell=0; iCell<3; iCell++)
-          {
-            int iNextXaxis = (((iNextWellplate-1) % 3) * 360) + (((iNextWellplateCell-1) % 3) * 110);
-            int iNextYaxis = ((iNextWellplate/4) * 258) + ((iNextWellplateCell/4) * 114);
-  
-            MoveGoPro(iNextXaxis, iNextYaxis);
-            iWellplate = iNextWellplate;
-            iWellplateCell = iNextWellplateCell;
-
-Serial.print(iWellplate);
-Serial.print("-");
-Serial.println(iWellplateCell);
-Serial.println("RECORD Beg");
-
-            if (iGoProEnabled)
-            {
-              // Clear out any left over characters
-              while (espSerial.available() != 0)
-              {
-                iESP8266Byte = espSerial.read();
-              }
-              
-              espSerial.print("1");
-              int iCnt = 0;
-              while (espSerial.available() == 0)
-              {
-                delay(100);
-                //if (((iCnt++) % 100) == 0)
-                  //Serial.print("*");
-              }
-              iESP8266Byte = espSerial.read();
-            }
-            else
-            {
-              iESP8266Byte = '1';
-            }
-            if (iESP8266Byte == '1')
-            {
-              Serial.println(F(" START"));
-              iRecording = true;
-              digitalWrite(LED_BUILTIN, HIGH);
-
-              delay(iCurrentTimeDelay);
-              
-              Serial.println(F("Record Video STOP"));
-              if (iGoProEnabled)
-              {
-                espSerial.print("0");
-              }
-            }
-            else
-            {
-              SendString_ble_F(F("\\n*** Record Video FAILED ***\\n"));
-              Serial.println(F(" FAILED"));
-            }      
-
-
-             
-delay(5000);
-Serial.println("RECORD End");
-
-            if (sExecuteScript[i+4] == 'F')
-              iNextWellplateCell++;
-            else            
-              iNextWellplateCell--;
-          }
-        }
+        int iRetCode = ExecuteScript();
       }
       else
       {
@@ -785,11 +694,12 @@ void HelpDisplay()
   SendString_ble_F(F("  99 Abort recording cells\\n"));    
 }
 
-void MoveGoPro(int iNextXaxis, int iNextYaxis)
+void MoveGoPro(int iNextXaxis, int iNextYaxis, int iWait)
 {
   int iVal = 0;
 
-  SendString_ble_F(F("->Moving... please wait\\n"));    
+  if (iWait != 0)
+    SendString_ble_F(F("->Moving... please wait\\n"));    
 
   iVal = 0;
   if (iNextXaxis > iXaxis)
@@ -834,4 +744,125 @@ void MoveGoPro(int iNextXaxis, int iNextYaxis)
 
   iXaxis = iNextXaxis;
   iYaxis = iNextYaxis;
+}
+
+int ExecuteScript()
+{
+  strcpy(sExecuteScript, &ble.buffer[2]);
+  strupr(sExecuteScript);
+  Serial.println(sExecuteScript); 
+  int iLen = strlen(sExecuteScript);
+
+  char cESP8266Byte = '1';
+  
+  if (iGoProEnabled)
+  {
+    // Clear out any left over characters
+    while (espSerial.available() != 0)
+    {
+      cESP8266Byte = espSerial.read();
+    }
+    
+    SendString_ble_F(F("->Connecting to GoPro... please wait\\n"));    
+    espSerial.print("1");
+    
+    lStartTimeMS = millis();
+    while (espSerial.available() == 0)
+    {
+      delay(100);
+      if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+      {
+        SendString_ble_F(F("->GoPro connection **FAILED**\\n  Manually reset GoPro!\\n"));    
+        return (-1);
+      }
+    }
+    cESP8266Byte = espSerial.read();
+  }
+  else
+  {
+    cESP8266Byte = '1';
+  }
+
+  if (cESP8266Byte != '1')
+  {
+    SendString_ble_F(F("\\n*** Record Video FAILED ***\\n"));
+    Serial.println(F(" FAILED"));
+    return (-1);
+  }
+
+  
+  for (int i=0; i<iLen; i=i+4)
+  {
+    int iNextWellplate = (sExecuteScript[i]-'0'); 
+    int iNextWellplateCell; 
+
+    if (sExecuteScript[i+1] == '1')
+    {
+      if (sExecuteScript[i+2] == 'F')
+        iNextWellplateCell = 1;
+      else
+        iNextWellplateCell = 3;
+    }
+    else
+    {
+      if (sExecuteScript[i+2] == 'F')
+        iNextWellplateCell = 4;
+      else
+        iNextWellplateCell = 6;
+    }
+    
+    for (iCell=0; iCell<3; iCell++)
+    {
+      int iNextXaxis = (((iNextWellplate-1) % 3) * 360) + (((iNextWellplateCell-1) % 3) * 110);
+      int iNextYaxis = ((iNextWellplate/4) * 258) + ((iNextWellplateCell/4) * 114);
+
+      MoveGoPro(iNextXaxis, iNextYaxis, false);
+      iWellplate = iNextWellplate;
+      iWellplateCell = iNextWellplateCell;
+
+Serial.print(iWellplate);
+Serial.print("-");
+Serial.println(iWellplateCell);
+Serial.println("RECORD Beg");
+
+      if (iGoProEnabled && (cESP8266Byte == '1'))
+      {
+        char sNumb[2] = " ";
+        SendString_ble_F(F(" Recording "));
+        sNumb[0] = '0' + iWellplate;
+        SendString_ble(sNumb);
+        SendString_ble_F(F("-"));
+        sNumb[0] = '0' + iWellplateCell;
+        SendString_ble(sNumb);
+        SendString_ble_F(F("\\n"));
+        espSerial.print("A");
+        Serial.println(F(" START"));
+        iRecording = true;
+        digitalWrite(LED_BUILTIN, HIGH);
+
+        delay(iCurrentTimeDelay + 1000L);
+        
+        Serial.println(F("Record Video STOP"));
+        espSerial.print("S");
+      }
+      
+Serial.println("RECORD End");
+
+      if (sExecuteScript[i+2] == 'F')
+        iNextWellplateCell++;
+      else            
+        iNextWellplateCell--;
+    }
+  }
+
+  if (iGoProEnabled && (cESP8266Byte == '1'))
+  {
+    espSerial.print("0");
+  }
+
+  MoveGoPro(WellplatesCoords[0].x,WellplatesCoords[0].y, true);
+  iWellplate = 1;
+  iWellplateCell = 1;
+  
+  return (0);  
 }
