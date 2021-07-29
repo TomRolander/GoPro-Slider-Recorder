@@ -13,7 +13,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
-#define VERSION "Ver 0.6 2021-07-14"
+#define VERSION "Ver 0.7 2021-07-29"
 
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
@@ -42,41 +42,23 @@
 SoftwareSerial y_axisSerial(3, 2);
 
 SoftwareSerial espSerial(5, 4);
-int iESP8266Byte = 0;
+
 int iRecording = false;
-
-int iPosition = 0;
-int iCell = 0;
-
-int iRow = 0;
 
 long lStartTimeMS = 0;
 
 int iSteps = 0;
-int iDirection = 0;
-
-int iMaxCells = 3;  // 1 well plates at 3 cells per well plate row
-int iWellplates = 1;
 
 int iXaxis = 0;
 int iYaxis = 0;
 int iWellplate = 1;
 int iWellplateCell = 1;
 
-#if 1
 struct WellplateCoord
 {
   int x;
   int y;
 };
-  /*
-   1 000,000
-   2 360,000
-   3 720,000
-   4 000,258
-   5 360,258
-   6 720,258
-   */
 static struct WellplateCoord WellplatesCoords[6] =
   { 
     {  0,  0},
@@ -86,11 +68,10 @@ static struct WellplateCoord WellplatesCoords[6] =
     {360,258},
     {720,258}
   };
-#endif
 
-#define RECORDING_TIME_5_SEC 5000
-#define RECORDING_TIME_3_MIN 180000L
-#define RECORDING_TIME_5_MIN 300000L
+#define RECORDING_TIME_5_SEC (5000L + 1000L)
+#define RECORDING_TIME_3_MIN (180000L + 1000L)
+#define RECORDING_TIME_5_MIN (300000L + 1000L)
 #define RECORDING_TIME_5_SEC_STRING "5 Sec"
 #define RECORDING_TIME_3_MIN_STRING "3 Min"
 #define RECORDING_TIME_5_MIN_STRING "5 Min"
@@ -99,7 +80,7 @@ static struct WellplateCoord WellplatesCoords[6] =
 #define GOPRO_CONNECT_TIMEOUT 30000L
 
 long iTimeDelay = DEFAULT_RECORDING_TIME_MS;
-long iCurrentTimeDelay = DEFAULT_RECORDING_TIME_MS;
+long lCurrentTimeDelay = DEFAULT_RECORDING_TIME_MS;
 char sRecordingTime[32] = RECORDING_TIME_5_SEC_STRING;
 
 //#define DEFAULT_CELL_STEP_SIZE 116
@@ -107,20 +88,6 @@ char sRecordingTime[32] = RECORDING_TIME_5_SEC_STRING;
 
 #define DEFAULT_CELL_STEP_SIZE 110
 #define DEFAULT_GAP_STEP_SIZE (110+30)
-
-#define STATE_READY             0
-#define STATE_RECORDING_CELL_1  1
-#define STATE_MOVING_TO_CELL_2  2
-#define STATE_RECORDING_CELL_2  3
-#define STATE_MOVING_TO_CELL_3  4
-#define STATE_RECORDING_CELL_3  5
-#define STATE_MOVING_TO_CELL_1  6
-
-#define STATE_WAITING_FOR_COMPLETION 7
-
-int iState = STATE_READY;
-
-int iProcessing = false;
 
 int iShowCommand = true;
 
@@ -193,12 +160,8 @@ void loop(void)
 
   if (iShowCommand)
   {
-    char sCells[2] = " ";
     iShowCommand = false;
-    SendString_ble_F(F("<")); 
-    sCells[0] = '0' + (char)iMaxCells;   
-    SendString_ble(sCells);    
-    SendString_ble_F(F(" cells "));    
+    SendString_ble_F(F("<Rec ")); 
     SendString_ble(sRecordingTime);    
     SendString_ble_F(F(" GoPro ")); 
     if (iGoProEnabled)   
@@ -208,19 +171,10 @@ void loop(void)
     SendString_ble_F(F("  COMMAND>"));    
   }
 
-  if (ble.isConnected())
+  bCommandReceived = GetCommand();
+  if (bCommandReceived)
   {
-    ble.println(F("AT+BLEUARTRX")); // Request string from BLE module
-    ble.readline(); // Read outcome
-
-    if (strcmp(ble.buffer, "OK") != 0)
     {
-      // Some data was found, its in the buffer
-      Serial.print(F("[Recv] ")); 
-      Serial.println(ble.buffer);
-      ble.waitForOK();
-      bCommandReceived = true;
-
       char chCommand = toupper(ble.buffer[0]);
 
       if (isDigit(ble.buffer[0]) && isDigit(ble.buffer[1]))
@@ -229,90 +183,53 @@ void loop(void)
         switch(iCommand)
         {
           case 0: // Start Recording cells
-            SendString_ble_F(F("Start recording cells\\n"));
-            Serial.println(F("Start recording cells"));
+            if (strlen(sExecuteScript) == 0)
+            {
+              SendString_ble_F(F("Enter script 'X=wrd'\\n"));
+            }
+            else
+            {
+              SendString_ble_F(F("Start recording cells\\n"));
+              Serial.println(F("Start recording cells"));
+              int iRetCode = ExecuteScript();        
+            }
             break;
             
           case 1: 
-            SendString_ble_F(F("1 Well Plate with 3 cells\\n"));
-            Serial.println(F("1 Well Plate with 3 cells"));
-            iWellplates = 1;
-            iMaxCells = 3;
-            break;
-          case 2: 
-            SendString_ble_F(F("2 Well Plates with 6 cells\\n"));
-            Serial.println(F("2 Well Plates with 6 cells"));
-            iWellplates = 2;
-            iMaxCells = 6;
-            break;
-          case 3: 
-            SendString_ble_F(F("3 Well Plates with 9 cells\\n"));
-            Serial.println(F("3 Well Plates with 9 cells"));
-            iWellplates = 3;
-            iMaxCells = 9;
-            break;
-          case 4: 
             SendString_ble_F(F("Recording time 5 sec\\n"));
             Serial.println(F("Recording time 5 sec"));
-            iCurrentTimeDelay = RECORDING_TIME_5_SEC;
+            lCurrentTimeDelay = RECORDING_TIME_5_SEC;
             strcpy(sRecordingTime, RECORDING_TIME_5_SEC_STRING);
             break;
-          case 5: 
+            
+          case 2: 
             SendString_ble_F(F("Recording time 3 min\\n"));
             Serial.println(F("Recording time 3 min"));
-            iCurrentTimeDelay = RECORDING_TIME_3_MIN;
+            lCurrentTimeDelay = RECORDING_TIME_3_MIN;
             strcpy(sRecordingTime, RECORDING_TIME_3_MIN_STRING);
             break;
-          case 6: 
+            
+          case 3:           
             SendString_ble_F(F("Recording time 5 min\\n"));
             Serial.println(F("Recording time 5 min"));
-            iCurrentTimeDelay = RECORDING_TIME_5_MIN;
+            lCurrentTimeDelay = RECORDING_TIME_5_MIN;
             strcpy(sRecordingTime, RECORDING_TIME_5_MIN_STRING);
             break;
-          case 7:
+            
+          case 4:
             SendString_ble_F(F("Disable GoPro, slider only\\n"));
             Serial.println(F("Disable GoPro, slider only"));
             iGoProEnabled = false;
             break;
-          case 8:
+            
+          case 5:
             SendString_ble_F(F("Enable GoPro\\n"));
             Serial.println(F("Enable GoPro"));
             iGoProEnabled = true;
             break;
-          case 9:
-            SendString_ble_F(F("Forward cellplate row\\n"));
-            Serial.println(F("Forward cellplate row"));
-
-            Serial.println(F("Sending 'F' command"));
-            y_axisSerial.print("F258");
-
-            delay(10000);
-
-#if 0            
-            Serial.println("Wait for completion.");
-            while (y_axisSerial.available() == 0)
-              ;
-            char cForword = y_axisSerial.read();    
-            Serial.print("RET = ");
-            Serial.println(cForword);
-#endif            
-            break;
-          case 10:
-            SendString_ble_F(F("Backward cellplate row\\n"));
-            Serial.println(F("Backward cellplate row"));
-            y_axisSerial.print("B258");
-
-            delay(10000);
-#if 0            
-            while (y_axisSerial.available() == 0)
-              ;
-            char cBackword = y_axisSerial.read();    
-            Serial.print("RET = ");
-            Serial.println(cBackword);
-#endif            
-            break;
             
           case 99:  // Abort Recording cells
+#if 0          
             if (iProcessing)
             {
               SendString_ble_F(F("Abort recording cells\\n"));
@@ -340,6 +257,7 @@ void loop(void)
               SendString_ble_F(F("Not recording cells\\n"));
               Serial.println(F("Not recording cells"));
             }
+#endif            
             break;
             
           default:     
@@ -424,7 +342,31 @@ void loop(void)
       else
       if (chCommand == 'X' && ble.buffer[1] == '=')
       {
-        int iRetCode = ExecuteScript();
+        int iRetCode = ProcessScript();
+        if (iRetCode == 0)
+        {
+          SendString_ble_F(F("Script processed OK"));
+        }
+        else
+        {
+          SendString_ble_F(F("Script ERROR: "));
+          switch (iRetCode)
+          {
+            case -1:
+              SendString_ble_F(F("Invalid well plate # (1-6)"));
+              break; 
+            case -2:
+              SendString_ble_F(F("Invalid row # (1-2)"));
+              break; 
+            case -3:
+              SendString_ble_F(F("Invalid direction (F,R)"));
+              break; 
+            case -4:
+              SendString_ble_F(F("Script too long (<64)"));
+              break; 
+          }
+        }
+        SendString_ble_F(F("\\n"));        
       }
       else
       {
@@ -448,207 +390,9 @@ void loop(void)
     iShowCommand = true;
   }
 
-//Serial.print("STATE = ");
-//Serial.println(iState);
-  
-  switch(iState)
-  {
-    case STATE_READY:    
-    // Process any pending Bluetooth input
-    if (bCommandReceived)
-    {
-      if (strcmp(ble.buffer, "00") == 0)
-      {
-        if (iRecording == false)
-        {
-            iProcessing = true;
-            iState = STATE_RECORDING_CELL_1;
-            iTimeDelay = iCurrentTimeDelay;
-            iPosition = 0;
-            iCell = 0;           
-            //ble.end();
-        }            
-      }
-    }
-    break;
-
-  case STATE_RECORDING_CELL_1:   
-  case STATE_RECORDING_CELL_2:   
-  case STATE_RECORDING_CELL_3:   
-    if (iRecording == false)
-    {
-      Serial.println(F("Record Video"));
-      if (iGoProEnabled)
-      {
-        // Clear out any left over characters
-        while (espSerial.available() != 0)
-        {
-          iESP8266Byte = espSerial.read();
-        }
-        
-        espSerial.print("1");
-        int iCnt = 0;
-        while (espSerial.available() == 0)
-        {
-          delay(100);
-          //if (((iCnt++) % 100) == 0)
-            //Serial.print("*");
-        }
-        iESP8266Byte = espSerial.read();
-#if 0
-        Serial.println("#########");
-        Serial.print("#### ");
-        Serial.print(iESP8266Byte,HEX);
-        Serial.println("#### ");
-        Serial.println("#########");
-        iESP8266Byte = '1';
-#endif
-      }
-      else
-      {
-        iESP8266Byte = '1';
-      }
-      if (iESP8266Byte == '1')
-      {
-        Serial.println(F(" START"));
-        iRecording = true;
-        digitalWrite(LED_BUILTIN, HIGH);
-        lStartTimeMS = millis();
-        iCell++;
-      }
-      else
-      {
-        SendString_ble_F(F("\\n*** Record Video FAILED ***\\n"));
-        Serial.println(F(" FAILED"));
-      }      
-    }
-    else
-    {
-      if (millis() > (lStartTimeMS+iTimeDelay))
-      {
-        Serial.println(F("Record Video STOP"));
-        if (iGoProEnabled)
-        {
-          espSerial.print("0");
-        }
-        iRecording = false;
-        digitalWrite(LED_BUILTIN, LOW);
-        if (iState == STATE_RECORDING_CELL_1)
-        {
-          iState = STATE_MOVING_TO_CELL_2;
-          iSteps = DEFAULT_CELL_STEP_SIZE;
-          iDirection = FORWARD; 
-          iTimeDelay = 3000;           
-          iPosition += iSteps;
-        }
-        else
-        if (iState == STATE_RECORDING_CELL_2)
-        {
-          iState = STATE_MOVING_TO_CELL_3;
-          iSteps = DEFAULT_CELL_STEP_SIZE;
-          iDirection = FORWARD;            
-          iTimeDelay = 3000;           
-          iPosition += iSteps;
-        }
-        else
-        if (iState == STATE_RECORDING_CELL_3)
-        {
-          iState = STATE_MOVING_TO_CELL_1;
-          if (iCell < iMaxCells)
-          {
-            iSteps = DEFAULT_GAP_STEP_SIZE;
-            iDirection = FORWARD;
-            iPosition += iSteps;
-          }
-          else
-          {
-            iSteps = iPosition;
-            iDirection = BACKWARD;
-            iTimeDelay = 10000;           
-          }                     
-        }
-        motor->step(iSteps, iDirection, SINGLE); 
-        motor->release(); 
-        lStartTimeMS = millis();
-        Serial.print(F("Move Start Time MS = "));
-        Serial.println(lStartTimeMS);
-
-        if (iDirection == BACKWARD)
-        {
-            SendString_ble_F(F("Forward cellplate row\\n"));
-            Serial.println(F("Forward cellplate row"));
-
-            iRow++;
-            if (iRow == 1)
-            {
-              Serial.println(F("Sending 'F' command"));
-              y_axisSerial.print("F114");
-              iState = STATE_RECORDING_CELL_1;
-            }
-            else
-            if (iRow == 2)
-            {
-              Serial.println(F("Sending 'B' command"));
-              y_axisSerial.print("B114");
-              iState = STATE_READY;
-              iRow = 0;
-           }
-            delay(3000);
-            iPosition = 0;
-            iCell = 0;           
-
-        }
-      }
-    }
-    
-    break;
-
-  case STATE_MOVING_TO_CELL_1:
-  case STATE_MOVING_TO_CELL_2:
-  case STATE_MOVING_TO_CELL_3:
-    if (millis() > (lStartTimeMS+iTimeDelay))
-    {
-      if (iState == STATE_MOVING_TO_CELL_1)
-      {
-        if (iCell < iMaxCells)
-          iState = STATE_RECORDING_CELL_1;
-        else
-          iState = STATE_READY;
-        iTimeDelay = iCurrentTimeDelay;           
-        //if (!ble.begin(false))
-        //  for (;;); // BLE init error? LED on forever
-        //ble.echo(false);
-      }
-      else
-      if (iState == STATE_MOVING_TO_CELL_2)
-      {
-        iState = STATE_RECORDING_CELL_2;
-        iTimeDelay = iCurrentTimeDelay;           
-      }
-      else
-      if (iState == STATE_MOVING_TO_CELL_3)
-      {
-        iState = STATE_RECORDING_CELL_3;
-        iTimeDelay = iCurrentTimeDelay;           
-      }
-      lStartTimeMS = millis();
-//      Serial.print("Recording Start Time MS = ");
-//      Serial.println(lStartTimeMS);
-    }
-    break;
-
-    case STATE_WAITING_FOR_COMPLETION:    
-      if (y_axisSerial.available() != 0)
-      {
-        char cForword = y_axisSerial.read();    
-        Serial.print("RET = ");
-        Serial.println(cForword);
-        iState = STATE_READY;    
-      }
-    break;
-  }
   delay(250);
-  //Serial.println(iState);
+  
+//  Serial.println("LOOP");
 }
 
 boolean checkCRC(uint8_t sum, uint8_t CRCindex) {
@@ -680,18 +424,13 @@ void HelpDisplay()
 {
   SendString_ble_F(F("\\nCommands:\\n"));
   SendString_ble_F(F("  00 Start recording cells\\n"));
-  SendString_ble_F(F("  01 Well plate 3 cells\\n"));
-  SendString_ble_F(F("  02 Well plates 6 cells\\n"));
-  SendString_ble_F(F("  03 Well plates 9 cells\\n"));
-  SendString_ble_F(F("  04 Recording time 5 sec\\n"));
-  SendString_ble_F(F("  05 Recording time 3 min\\n"));
-  SendString_ble_F(F("  06 Recording time 5 min\\n"));
-  SendString_ble_F(F("  07 Disable GoPro, slider only\\n"));
-  SendString_ble_F(F("  08 Enable GoPro\\n"));
-  SendString_ble_F(F("  09 Forward cellplate row\\n"));
-  SendString_ble_F(F("  10 Backward cellplate row\\n"));
-  SendString_ble_F(F("  8x Send 'x' GoPro Command\\n"));
+  SendString_ble_F(F("  01 Recording time 5 sec\\n"));
+  SendString_ble_F(F("  02 Recording time 3 min\\n"));
+  SendString_ble_F(F("  03 Recording time 5 min\\n"));
+  SendString_ble_F(F("  04 Disable GoPro, slider only\\n"));
+  SendString_ble_F(F("  05 Enable GoPro\\n"));
   SendString_ble_F(F("  99 Abort recording cells\\n"));    
+  SendString_ble_F(F("  X= Script ('wrd')\\n"));    
 }
 
 void MoveGoPro(int iNextXaxis, int iNextYaxis, int iWait)
@@ -746,11 +485,33 @@ void MoveGoPro(int iNextXaxis, int iNextYaxis, int iWait)
   iYaxis = iNextYaxis;
 }
 
-int ExecuteScript()
+int ProcessScript()
 {
   strcpy(sExecuteScript, &ble.buffer[2]);
   strupr(sExecuteScript);
-  Serial.println(sExecuteScript); 
+  Serial.println(sExecuteScript);
+  int iLen = strlen(sExecuteScript);
+
+  if (iLen >= 64)
+    return (-4);
+
+  for (int i=0; i<iLen; i=i+4)
+  {
+    int iNextWellplate = (sExecuteScript[i]-'0'); 
+    int iNextWellplateCell; 
+
+    if (sExecuteScript[i] < '1' || sExecuteScript[i] > '6')
+      return (-1);
+    if (sExecuteScript[i+1] != '1' && sExecuteScript[i+1] != '2')
+      return (-2);
+    if (sExecuteScript[i+2] != 'F' && sExecuteScript[i+2] != 'R')
+      return (-3);
+  }  
+  return (0);
+}
+
+int ExecuteScript()
+{
   int iLen = strlen(sExecuteScript);
 
   char cESP8266Byte = '1';
@@ -811,7 +572,7 @@ int ExecuteScript()
         iNextWellplateCell = 6;
     }
     
-    for (iCell=0; iCell<3; iCell++)
+    for (int iCell=0; iCell<3; iCell++)
     {
       int iNextXaxis = (((iNextWellplate-1) % 3) * 360) + (((iNextWellplateCell-1) % 3) * 110);
       int iNextYaxis = ((iNextWellplate/4) * 258) + ((iNextWellplateCell/4) * 114);
@@ -825,7 +586,6 @@ Serial.print("-");
 Serial.println(iWellplateCell);
 Serial.println("RECORD Beg");
 
-      if (iGoProEnabled && (cESP8266Byte == '1'))
       {
         char sNumb[2] = " ";
         SendString_ble_F(F(" Recording "));
@@ -835,15 +595,45 @@ Serial.println("RECORD Beg");
         sNumb[0] = '0' + iWellplateCell;
         SendString_ble(sNumb);
         SendString_ble_F(F("\\n"));
-        espSerial.print("A");
+        
+        if (iGoProEnabled)
+          espSerial.print("A");
+          
         Serial.println(F(" START"));
         iRecording = true;
         digitalWrite(LED_BUILTIN, HIGH);
 
-        delay(iCurrentTimeDelay + 1000L);
+        lStartTimeMS = millis();
+        while ((millis() - lStartTimeMS) < lCurrentTimeDelay)
+        {
+          delay(1000);
+          if (GetCommand())
+          {
+            if (ble.buffer[0] == '9' && ble.buffer[1] == '9')
+            {
+              SendString_ble_F(F("  Recording aborted\\n"));
+              if (iGoProEnabled)
+              {
+                espSerial.print("S");
+                espSerial.print("0");
+              }
+              MoveGoPro(WellplatesCoords[0].x,WellplatesCoords[0].y, true);
+              iWellplate = 1;
+              iWellplateCell = 1;
+              return (1);
+            }
+            else
+            {
+              SendString_ble_F(F("  Commands ignored during recording\\n"));
+            }
+          }
+        }
+//      delay(lCurrentTimeDelay);
         
         Serial.println(F("Record Video STOP"));
-        espSerial.print("S");
+        
+        if (iGoProEnabled)
+          espSerial.print("S");
       }
       
 Serial.println("RECORD End");
@@ -855,7 +645,7 @@ Serial.println("RECORD End");
     }
   }
 
-  if (iGoProEnabled && (cESP8266Byte == '1'))
+  if (iGoProEnabled)
   {
     espSerial.print("0");
   }
@@ -865,4 +655,23 @@ Serial.println("RECORD End");
   iWellplateCell = 1;
   
   return (0);  
+}
+
+bool GetCommand()
+{
+  if (ble.isConnected())
+  {
+    ble.println(F("AT+BLEUARTRX")); // Request string from BLE module
+    ble.readline(); // Read outcome
+
+    if (strcmp(ble.buffer, "OK") != 0)
+    {
+      // Some data was found, its in the buffer
+      Serial.print(F("[Recv] ")); 
+      Serial.println(ble.buffer);
+      ble.waitForOK();
+      return (true);
+    }
+  }
+  return (false);
 }
