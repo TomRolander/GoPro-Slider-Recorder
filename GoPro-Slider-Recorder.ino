@@ -229,35 +229,7 @@ void loop(void)
             break;
             
           case 99:  // Abort Recording cells
-#if 0          
-            if (iProcessing)
-            {
-              SendString_ble_F(F("Abort recording cells\\n"));
-              Serial.println(F("Abort recording cells"));
-              iProcessing = false;
-              if (iRecording)
-              {
-                Serial.println(F("Record Video STOP"));
-                if (iGoProEnabled)
-                {
-                  espSerial.print("0");
-                }
-                iRecording = false;
-                digitalWrite(LED_BUILTIN, LOW);
-              }
-              iSteps = iPosition;
-              iDirection = BACKWARD;
-              iTimeDelay = 10000;           
-              motor->step(iSteps, iDirection, SINGLE); 
-              motor->release(); 
-              iState = STATE_READY;
-            }
-            else
-            {
-              SendString_ble_F(F("Not recording cells\\n"));
-              Serial.println(F("Not recording cells"));
-            }
-#endif            
+            // handled separately below
             break;
             
           default:     
@@ -628,12 +600,16 @@ Serial.println("RECORD Beg");
             }
           }
         }
-//      delay(lCurrentTimeDelay);
         
         Serial.println(F("Record Video STOP"));
         
         if (iGoProEnabled)
+        {
           espSerial.print("S");
+
+          //Delay while GoPro writes out recording to SDCard
+          delay(5000);
+        }
       }
       
 Serial.println("RECORD End");
