@@ -18,6 +18,7 @@
   - Comment and clean up code
   - Do GetCommand to detect abort commands during GoProMove
   - Add debug mode for BLE messages and conditionally comment out Serial.print's
+  - Add Single picture mode (and other options;)
 
  **************************************************************************/
 
