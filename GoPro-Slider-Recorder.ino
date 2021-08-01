@@ -246,6 +246,16 @@ void loop(void)
             }
             break;
 
+          case 7:
+          {
+            char buffer[20];
+            espSerial.print("2");
+            espSerial.readBytes(buffer, sizeof(buffer));
+            Serial.println(buffer);
+            SendString_ble(buffer);
+            SendString_ble_F(F("\\n"));
+            break;
+          }
           case 99:  // Abort Recording cells
             // handled separately below
             break;
@@ -412,6 +422,7 @@ void HelpDisplay()
   SendString_ble_F(F("  04 Disable GoPro, slider only\\n"));
   SendString_ble_F(F("  05 Enable GoPro\\n"));
   SendString_ble_F(F("  06 Test GoPro Connect\Disconnect\\n"));
+  SendString_ble_F(F("  07 Get NTP current time\\n"));
   SendString_ble_F(F("  99 Abort recording cells\\n"));
   SendString_ble_F(F("  X= Script ('wrd')\\n"));
 }
