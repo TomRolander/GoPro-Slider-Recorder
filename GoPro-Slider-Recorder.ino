@@ -17,14 +17,15 @@
   To Do:
   - Comment and clean up code
   - AFter 09 first 00 errors then OK ?
-  - Add command to show loaded script  
+  - Set timer for script execution, and show time
+  - Adjust time for DST
 
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
 #define VERSION "Ver 0.7 2021-07-29"
 
-#define DEBUG_OUTPUT 0
+#define DEBUG_OUTPUT 1
 
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
@@ -57,6 +58,12 @@ SoftwareSerial espSerial(5, 4);
 bool bPhotoMode = false;
 
 long lStartTimeMS = 0;
+long lWaitTimeMS = 0;
+
+bool  bDoStartTime = false;
+char  sStartTime[6] = "";
+
+char sCurrentNTP[20] = "";
 
 int iSteps = 0;
 
@@ -89,6 +96,8 @@ static struct WellplateCoord WellplatesCoords[6] =
 #define DEFAULT_RECORDING_TIME_MS RECORDING_TIME_5_SEC
 
 #define GOPRO_CONNECT_TIMEOUT 30000L
+
+#define CHECK_NTP 30000L
 
 long iTimeDelay = DEFAULT_RECORDING_TIME_MS;
 long lCurrentTimeDelay = DEFAULT_RECORDING_TIME_MS;
@@ -281,38 +290,78 @@ void loop(void)
 
           case 9:
           {
-            while (espSerial.available() != 0)
-            {
-              char cESP8266Byte = espSerial.read();
-            }
-            for (int i=0; i<10; i++)
-            {
-              char buffer[20];
-              espSerial.print("2");
-              while (espSerial.available() == 0)
-              {
-                ;
-              }
-              int iNmbBytes = espSerial.readBytes(buffer, sizeof(buffer));
-#if DEBUG_OUTPUT
-              Serial.println(iNmbBytes);
-#endif
-              if (iNmbBytes != 20)
-                continue;
-#if DEBUG_OUTPUT
-              Serial.println(buffer);
-#endif
-              SendString_ble(buffer);
-              SendString_ble_F(F("\\n"));
-              if (buffer[ 4] == '-' &&
-                  buffer[ 7] == '-' &&
-                  buffer[13] == ':' &&
-                  buffer[16] == ':')
-                  break;
-              delay(2000);
-            }
+            if (GetNTP(sCurrentNTP, true) == false)
+              SendString_ble_F(F("Failed to get NTP\\n"));
             break;
           }
+
+          case 10:
+            SendString_ble(sExecuteScript);
+            SendString_ble_F(F("\\n"));
+#if DEBUG_OUTPUT
+            Serial.println(sExecuteScript);
+#endif
+            break;
+            
+          case 11:
+          {
+            bool bStartTimeOK = false;
+            if (isDigit(ble.buffer[3]) &&
+                isDigit(ble.buffer[4]) &&
+                isDigit(ble.buffer[6]) &&
+                isDigit(ble.buffer[7]) &&
+                ble.buffer[5] == ':')
+            {
+              strncpy(sStartTime, &ble.buffer[3], 5);
+              sStartTime[5] = '\0';
+              bStartTimeOK = true;
+            }
+
+            if (bStartTimeOK == false)
+              SendString_ble_F(F("Bad start time, expected HH:MM\\n"));
+            else
+              SendString_ble_F(F("Set start time = "));
+              SendString_ble(sStartTime);
+              SendString_ble_F(F("\\n"));
+#if DEBUG_OUTPUT
+            Serial.print("Set start time = ");
+            Serial.println(sStartTime);
+#endif
+            break;
+          }
+                      
+          case 12:
+              SendString_ble_F(F("Start time = "));
+              SendString_ble(sStartTime);
+              SendString_ble_F(F("\\n"));
+#if DEBUG_OUTPUT
+              Serial.print("Set start time = ");
+              Serial.println(sStartTime);
+#endif
+              break;
+            
+          case 13:
+            if (strlen(sExecuteScript) == 0)
+            {
+              SendString_ble_F(F("Script required!\\n"));
+              break;
+            }
+            if (strlen(sStartTime) == 0)
+            {
+              SendString_ble_F(F("Start time required!\\n"));
+              break;
+            }
+            bDoStartTime = true;
+            lWaitTimeMS = millis();
+            SendString_ble_F(F("Recording at start time = "));
+            SendString_ble(sStartTime);
+            SendString_ble_F(F("\\n"));
+#if DEBUG_OUTPUT
+            Serial.print("Recording at start time = ");
+            Serial.println(sStartTime);
+#endif
+            break;
+            
           case 99:  // Abort Recording cells
             // handled separately below
             break;
@@ -445,6 +494,51 @@ void loop(void)
 
   delay(250);
 
+  if (bDoStartTime)
+  {
+    if (millis() > (lWaitTimeMS + CHECK_NTP))
+    {      
+      // Get NTP time and compare to Start Time
+      if (GetNTP(sCurrentNTP, false))
+      {
+#if DEBUG_OUTPUT
+        Serial.println(F("COMPARE to start time:"));
+        Serial.println(sStartTime);
+        Serial.println(&sCurrentNTP[11]);
+#endif
+        
+        if (strncmp(sStartTime, &sCurrentNTP[11], 5) == 0)
+        {
+          bDoStartTime = false;
+          if (bPhotoMode)
+            SendString_ble_F(F("Start photos of cells\\n"));
+          else
+            SendString_ble_F(F("Start recording cells\\n"));
+#if DEBUG_OUTPUT
+          Serial.println(F("Start recording cells"));
+#endif
+          int iRetCode = ExecuteScript();
+          return;
+        }
+      }
+
+      lWaitTimeMS = millis();
+      if (GetCommand())
+      {
+        if (ble.buffer[0] == '9' && ble.buffer[1] == '9')
+        {
+          SendString_ble_F(F("  Start time aborted\\n"));
+          bDoStartTime = false;
+        }
+        else
+        {
+          SendString_ble_F(F("  Commands ignored during start time wait\\n"));
+        }
+      }
+    
+    }
+  }
+
   //  Serial.println("LOOP");
 }
 
@@ -531,46 +625,53 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
 
 bool GoProConnect()
 {
+  int iTryCount = 0;
+  
   char cESP8266Byte = '\0';
-  
-  // Clear out any left over characters
-  while (espSerial.available() != 0)
-  {
-    cESP8266Byte = espSerial.read();
-  }
-  
-  SendString_ble_F(F("->Connecting to GoPro... please wait\\n"));
-  espSerial.print("1");
-  
-  lStartTimeMS = millis();
-  while (espSerial.available() == 0)
-  {
-    delay(100);
-    if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
-    {
-      return (false);
-    }
-  }
-  cESP8266Byte = espSerial.read();
-  if (cESP8266Byte != '1')
-    return (false);
 
-  if (bPhotoMode)
+  while (iTryCount++ < 3)
   {
-    espSerial.print("P");
-  }
-  else
-  {
-    espSerial.print("V");
-  }
-  if (WaitForEspSerial() == false)
-    return (false);
-      
-  cESP8266Byte = espSerial.read();
-  if (cESP8266Byte != '1')
-    return (false);
+    // Clear out any left over characters
+    while (espSerial.available() != 0)
+    {
+      cESP8266Byte = espSerial.read();
+    }
     
-  return (true);
+    SendString_ble_F(F("->Connecting to GoPro... please wait\\n"));
+    espSerial.print("1");
+    
+    lStartTimeMS = millis();
+    while (espSerial.available() == 0)
+    {
+      delay(100);
+      if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+      {
+        continue;
+      }
+    }
+    cESP8266Byte = espSerial.read();
+    if (cESP8266Byte != '1')
+      continue;
+  
+    if (bPhotoMode)
+    {
+      espSerial.print("P");
+    }
+    else
+    {
+      espSerial.print("V");
+    }
+    if (WaitForEspSerial() == false)
+      continue;
+        
+    cESP8266Byte = espSerial.read();
+    if (cESP8266Byte != '1')
+      continue;
+      
+    return (true);
+  }
+
+  return (false);
 }
 
 bool GoProDisconnect()
@@ -820,6 +921,51 @@ bool WaitFor_y_axisSerial()
   return (true);
 }
 
+bool GetNTP(char *buffer, bool bDisplay)
+{
+  while (espSerial.available() != 0)
+  {
+    char cESP8266Byte = espSerial.read();
+  }
+  for (int i=0; i<10; i++)
+  {
+    char tmpbuffer[20];
+    espSerial.print("2");
+    while (espSerial.available() == 0)
+    {
+      ;
+    }
+    int iNmbBytes = espSerial.readBytes(tmpbuffer, sizeof(tmpbuffer));
+    tmpbuffer[19] = '\0';
+#if DEBUG_OUTPUT
+    Serial.print("NTP string size = ");
+    Serial.println(iNmbBytes);
+#endif
+    if (iNmbBytes != 20)
+      continue;
+#if DEBUG_OUTPUT
+    Serial.print("NTP = ");
+    Serial.println(tmpbuffer);
+#endif
+
+    if (bDisplay)
+    {
+      SendString_ble(tmpbuffer);
+      SendString_ble_F(F("\\n"));
+    }
+    if (tmpbuffer[ 4] == '-' &&
+        tmpbuffer[ 7] == '-' &&
+        tmpbuffer[13] == ':' &&
+        tmpbuffer[16] == ':')
+    {
+        strcpy(sCurrentNTP, tmpbuffer);
+        return (true);
+    }
+    delay(2000);
+  }
+  return (false);
+}
+
 void HelpDisplay()
 {
   SendString_ble_F(F("\\nCommands:\\n"));
@@ -833,6 +979,10 @@ void HelpDisplay()
   SendString_ble_F(F("  07 Photo Mode GoPro\\n"));
   SendString_ble_F(F("  08 Test GoPro Connect\Disconnect\\n"));
   SendString_ble_F(F("  09 Get NTP current time\\n"));
+  SendString_ble_F(F("  10 Script display\\n"));
+  SendString_ble_F(F("  11 Set start time HH:MM\\n"));
+  SendString_ble_F(F("  12 Display start time\\n"));
+  SendString_ble_F(F("  13 Begin recording at start time\\n"));
   SendString_ble_F(F("  99 Abort recording cells\\n"));
   SendString_ble_F(F("  X= Script ('wrd')\\n"));
 }
