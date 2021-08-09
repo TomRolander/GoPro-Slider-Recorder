@@ -23,9 +23,9 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
-#define VERSION "Ver 0.7 2021-07-29"
+#define VERSION "Ver 0.8 2021-08-09"
 
-#define DEBUG_OUTPUT 1
+#define DEBUG_OUTPUT 0
 
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
