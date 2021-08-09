@@ -16,11 +16,8 @@
 
   To Do:
   - Comment and clean up code
-  - Do GetCommand to detect abort commands during GoProMove
-  - Add debug mode for BLE messages and conditionally comment out Serial.print's
-  - Add Single picture mode (and other options;)
-  - 08 command doesn't show failure
-  
+  - AFter 09 first 00 errors then OK ?
+  - Add command to show loaded script  
 
  **************************************************************************/
 
@@ -284,12 +281,36 @@ void loop(void)
 
           case 9:
           {
-            char buffer[20];
-            espSerial.print("2");
-            espSerial.readBytes(buffer, sizeof(buffer));
-            Serial.println(buffer);
-            SendString_ble(buffer);
-            SendString_ble_F(F("\\n"));
+            while (espSerial.available() != 0)
+            {
+              char cESP8266Byte = espSerial.read();
+            }
+            for (int i=0; i<10; i++)
+            {
+              char buffer[20];
+              espSerial.print("2");
+              while (espSerial.available() == 0)
+              {
+                ;
+              }
+              int iNmbBytes = espSerial.readBytes(buffer, sizeof(buffer));
+#if DEBUG_OUTPUT
+              Serial.println(iNmbBytes);
+#endif
+              if (iNmbBytes != 20)
+                continue;
+#if DEBUG_OUTPUT
+              Serial.println(buffer);
+#endif
+              SendString_ble(buffer);
+              SendString_ble_F(F("\\n"));
+              if (buffer[ 4] == '-' &&
+                  buffer[ 7] == '-' &&
+                  buffer[13] == ':' &&
+                  buffer[16] == ':')
+                  break;
+              delay(2000);
+            }
             break;
           }
           case 99:  // Abort Recording cells
@@ -491,8 +512,14 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
   {
     y_axisSerial.print(sParam);
 
-    //Serial.println("Wait for completion.");
+//Serial.print("Wait for completion = ");
     //iState = STATE_WAITING_FOR_COMPLETION;
+
+//    if (WaitFor_y_axisSerial() == false)
+//      return;
+//    char cESP8266Byte = y_axisSerial.read();  
+//Serial.println(cESP8266Byte); 
+//Serial.println("DELAY");
 
     unsigned long ulDelayMS = (((unsigned long)iVal) / 5L) * 1000L;
     delay(ulDelayMS);
@@ -535,10 +562,13 @@ bool GoProConnect()
   else
   {
     espSerial.print("V");
-  }    
+  }
+  if (WaitForEspSerial() == false)
+    return (false);
+      
   cESP8266Byte = espSerial.read();
-  //if (cESP8266Byte != '1')
-    //return (false);
+  if (cESP8266Byte != '1')
+    return (false);
     
   return (true);
 }
@@ -546,7 +576,10 @@ bool GoProConnect()
 bool GoProDisconnect()
 {  
   espSerial.print("0");
-  char cESP8266Byte = espSerial.read();
+  
+  if (WaitForEspSerial() == false)
+    return (false);
+  char cESP8266Byte = espSerial.read();  
   if (cESP8266Byte != '1')
     return (false);
     
@@ -757,6 +790,34 @@ bool GetCommand()
     }
   }
   return (false);
+}
+
+bool WaitForEspSerial()
+{
+  lStartTimeMS = millis();
+  while (espSerial.available() == 0)
+  {
+    delay(100);
+    if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+    {
+      return (false);
+    }
+  }  
+  return (true);
+}
+
+bool WaitFor_y_axisSerial()
+{
+  lStartTimeMS = millis();
+  while (y_axisSerial.available() == 0)
+  {
+    delay(100);
+    if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+    {
+      return (false);
+    }
+  }  
+  return (true);
 }
 
 void HelpDisplay()
