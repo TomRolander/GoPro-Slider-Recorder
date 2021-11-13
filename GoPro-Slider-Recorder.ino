@@ -25,7 +25,7 @@
 #define PROGRAM "GoPro Slider Recorder"
 #define VERSION "Ver 0.8 2021-08-09"
 
-#define DEBUG_OUTPUT 0
+#define DEBUG_OUTPUT 1
 
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
@@ -358,6 +358,24 @@ void loop(void)
             SendString_ble_F(F("\\n"));
 #if DEBUG_OUTPUT
             Serial.print("Recording at start time = ");
+            Serial.println(sStartTime);
+#endif
+            break;
+            
+          case 14:
+            SendString_ble_F(F("Turn ON daylight savings\\n"));
+            espSerial.print("3");
+#if DEBUG_OUTPUT
+            Serial.print(""Turn ON daylight savings");
+            Serial.println(sStartTime);
+#endif
+            break;
+            
+          case 15:
+            SendString_ble_F(F("Turn OFF daylight savings\\n"));
+            espSerial.print("4");
+#if DEBUG_OUTPUT
+            Serial.print(""Turn OFF daylight savings");
             Serial.println(sStartTime);
 #endif
             break;
@@ -983,6 +1001,8 @@ void HelpDisplay()
   SendString_ble_F(F("  11 Set start time HH:MM\\n"));
   SendString_ble_F(F("  12 Display start time\\n"));
   SendString_ble_F(F("  13 Begin recording at start time\\n"));
+  SendString_ble_F(F("  14 Turn ON daylight time\\n"));
+  SendString_ble_F(F("  15 Turn OFF daylight time\\n"));
   SendString_ble_F(F("  99 Abort recording cells\\n"));
   SendString_ble_F(F("  X= Script ('wrd')\\n"));
 }
