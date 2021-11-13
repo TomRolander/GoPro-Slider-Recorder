@@ -164,8 +164,8 @@ void setup(void) {
   SendString_ble_F(F("\\n"));
   HelpDisplay();
 
-  //  AFMS.begin(4000);
-  AFMS.begin();
+  AFMS.begin(1600);
+//  AFMS.begin();
   motor->setSpeed(STEPPER_RPM);
   motor->release(); // Allow manual positioning at start
   digitalWrite(LED_BUILTIN, LOW); // LED off = successful init
@@ -570,6 +570,9 @@ void SendString_ble_F(const __FlashStringHelper *str)
 void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
 {
   int iVal = 0;
+  int iDirection;
+//  int iStyle = MICROSTEP;
+  int iStyle = INTERLEAVE;
 
   if (iWait != 0)
     SendString_ble_F(F("->Moving... please wait\\n"));
@@ -578,14 +581,26 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
   if (iNextXaxis > iXaxis)
   {
     iVal = iNextXaxis - iXaxis;
-    motor->step(iVal, FORWARD, SINGLE);
+    iDirection = FORWARD;
+    //motor->step(iVal, FORWARD, SINGLE);
   }
   else if (iNextXaxis < iXaxis)
   {
     iVal = iXaxis - iNextXaxis;
-    motor->step(iVal, BACKWARD, SINGLE);
+    iDirection = BACKWARD;
+    //motor->step(iVal, BACKWARD, SINGLE);
   }
+#if 1 
+  motor->step(iVal, iDirection, SINGLE);
   motor->release();
+#else
+  for (int i=0; i<iVal; i++)
+  {
+    motor->step(1, iDirection, iStyle); 
+//    motor->release();
+  } 
+  motor->release();
+#endif
 
   char sParam[5] = "X000";
   iVal = 0;
