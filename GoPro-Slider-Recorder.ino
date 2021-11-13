@@ -366,7 +366,7 @@ void loop(void)
             SendString_ble_F(F("Turn ON daylight savings\\n"));
             espSerial.print("3");
 #if DEBUG_OUTPUT
-            Serial.print(""Turn ON daylight savings");
+            Serial.print(F("Turn ON daylight savings"));
             Serial.println(sStartTime);
 #endif
             break;
@@ -375,7 +375,7 @@ void loop(void)
             SendString_ble_F(F("Turn OFF daylight savings\\n"));
             espSerial.print("4");
 #if DEBUG_OUTPUT
-            Serial.print(""Turn OFF daylight savings");
+            Serial.print(F("Turn OFF daylight savings"));
             Serial.println(sStartTime);
 #endif
             break;
