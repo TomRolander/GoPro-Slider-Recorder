@@ -23,9 +23,12 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
-#define VERSION "Ver 0.8 2021-08-09"
+#define VERSION "Ver 0.9 2022-03-10"
 
 #define DEBUG_OUTPUT 1
+
+#define DO_LOCAL_BLE  0
+#define DO_REMOTE_BLE 1
 
 // Smartphone- or tablet-activated timelapse camera slider.
 // Uses the following Adafruit parts:
@@ -46,14 +49,22 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_MotorShield.h>
+
+#if DO_LOCAL_BLE
 #include <Adafruit_BluefruitLE_SPI.h>
 #include <Adafruit_BluefruitLE_UART.h>
+#endif
 
 #include "BluefruitConfig.h"
 
 SoftwareSerial y_axisSerial(3, 2);
 
-SoftwareSerial espSerial(5, 4);
+SoftwareSerial espSerialGoPro(5, 4);
+
+SoftwareSerial espSerialPhone(7, 6);
+
+char espSerialPhoneBuffer[128] = "";
+
 
 bool bPhotoMode = false;
 
@@ -116,10 +127,11 @@ int iGoProEnabled = true;
 
 char sExecuteScript[128] = "";
 
-
+#if DO_LOCAL_BLE
 // Bluefruit config --------------------------------------------------------
 Adafruit_BluefruitLE_SPI ble(8, 7, 6); // CS, IRQ, RST pins
 //Adafruit_BluefruitLE_SPI ble(8, 7, -1); // CS, IRQ, RST pins
+#endif
 
 // Stepper motor config ----------------------------------------------------
 #define STEPPER_STEPS 1100 // Length of slider
@@ -130,10 +142,12 @@ Adafruit_StepperMotor *motor = AFMS.getStepper(200, 2);
 
 // Setup function - runs once at startup -----------------------------------
 void setup(void) {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  delay(5000);
 
   y_axisSerial.begin(1200);
-  espSerial.begin(1200);
+  espSerialGoPro.begin(1200);
+  espSerialPhone.begin(1200);
 
   delay(5000);
   Serial.println("");
@@ -142,26 +156,31 @@ void setup(void) {
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH); // LED steady on during init
+
+#if DO_LOCAL_BLE  
   if (!ble.begin(false))
     for (;;); // BLE init error? LED on forever
   ble.echo(false);
+#endif
 
   Serial.println(F("Please use Adafruit Bluefruit LE app to connect in UART mode"));
   Serial.println(F("Then Enter characters to send to Bluefruit"));
   Serial.println();
 
+#if DO_LOCAL_BLE  
   ble.verbose(false);  // debug info is a little annoying after this point!
 
   /* Wait for connection */
   while (! ble.isConnected()) {
     delay(500);
   }
+#endif
 
   delay(10000);
 
-  SendString_ble_F(F("GoPro Slider Recorder\\nVer "));
+  SendString_ble_F(F("GoPro Slider Recorder\nVer "));
   SendString_ble(VERSION);
-  SendString_ble_F(F("\\n"));
+  SendString_ble_F(F("\n"));
   HelpDisplay();
 
   AFMS.begin(1600);
@@ -199,25 +218,36 @@ void loop(void)
   bCommandReceived = GetCommand();
   if (bCommandReceived)
   {
+    espSerialPhoneBuffer[0] = '\0';
+    int iNext = 0;
+    while (espSerialPhone.available() > 0)
     {
-      char chCommand = toupper(ble.buffer[0]);
+      espSerialPhoneBuffer[iNext++] = espSerialPhone.read();
+    }
 
-      if (isDigit(ble.buffer[0]) && isDigit(ble.buffer[1]))
+#if DEBUG_OUTPUT
+Serial.print(espSerialPhoneBuffer);
+#endif
+    
+    {
+      char chCommand = toupper(espSerialPhoneBuffer[0]);
+
+      if (isDigit(espSerialPhoneBuffer[0]) && isDigit(espSerialPhoneBuffer[1]))
       {
-        iCommand = (int)(((char)ble.buffer[0] - '0') * 10) + (int)(((char)ble.buffer[1] - '0'));
+        iCommand = (int)(((char)espSerialPhoneBuffer[0] - '0') * 10) + (int)(((char)espSerialPhoneBuffer[1] - '0'));
         switch (iCommand)
         {
           case 0: // Start Recording cells
             if (strlen(sExecuteScript) == 0)
             {
-              SendString_ble_F(F("Enter script 'X=wrd'\\n"));
+              SendString_ble_F(F("Enter script 'X=wrd'\n"));
             }
             else
             {
               if (bPhotoMode)
-                SendString_ble_F(F("Start photos of cells\\n"));
+                SendString_ble_F(F("Start photos of cells\n"));
               else
-                SendString_ble_F(F("Start recording cells\\n"));
+                SendString_ble_F(F("Start recording cells\n"));
 #if DEBUG_OUTPUT
               Serial.println(F("Start recording cells"));
 #endif
@@ -226,7 +256,7 @@ void loop(void)
             break;
 
           case 1:
-            SendString_ble_F(F("Recording time 5 sec\\n"));
+            SendString_ble_F(F("Recording time 5 sec\n"));
 #if DEBUG_OUTPUT
             Serial.println(F("Recording time 5 sec"));
 #endif
@@ -235,7 +265,7 @@ void loop(void)
             break;
 
           case 2:
-            SendString_ble_F(F("Recording time 3 min\\n"));
+            SendString_ble_F(F("Recording time 3 min\n"));
 #if DEBUG_OUTPUT
             Serial.println(F("Recording time 3 min"));
 #endif
@@ -244,7 +274,7 @@ void loop(void)
             break;
 
           case 3:
-            SendString_ble_F(F("Recording time 5 min\\n"));
+            SendString_ble_F(F("Recording time 5 min\n"));
 #if DEBUG_OUTPUT
             Serial.println(F("Recording time 5 min"));
 #endif
@@ -253,7 +283,7 @@ void loop(void)
             break;
 
           case 4:
-            SendString_ble_F(F("Disable GoPro, slider only\\n"));
+            SendString_ble_F(F("Disable GoPro, slider only\n"));
 #if DEBUG_OUTPUT
             Serial.println(F("Disable GoPro, slider only"));
 #endif
@@ -261,7 +291,7 @@ void loop(void)
             break;
 
           case 5:
-            SendString_ble_F(F("Enable GoPro\\n"));
+            SendString_ble_F(F("Enable GoPro\n"));
 #if DEBUG_OUTPUT
             Serial.println(F("Enable GoPro"));
 #endif
@@ -280,24 +310,24 @@ void loop(void)
             if (GoProConnect() == true)
             {
               GoProDisconnect();
-              SendString_ble_F(F("Connection successful\\n"));
+              SendString_ble_F(F("Connection successful\n"));
             }
             else
             {
-              SendString_ble_F(F("->GoPro connection **FAILED**\\n  Manually reset GoPro!\\n"));      
+              SendString_ble_F(F("->GoPro connection **FAILED**\n  Manually reset GoPro!\n"));      
             }
             break;
 
           case 9:
           {
             if (GetNTP(sCurrentNTP, true) == false)
-              SendString_ble_F(F("Failed to get NTP\\n"));
+              SendString_ble_F(F("Failed to get NTP\n"));
             break;
           }
 
           case 10:
             SendString_ble(sExecuteScript);
-            SendString_ble_F(F("\\n"));
+            SendString_ble_F(F("\n"));
 #if DEBUG_OUTPUT
             Serial.println(sExecuteScript);
 #endif
@@ -306,23 +336,23 @@ void loop(void)
           case 11:
           {
             bool bStartTimeOK = false;
-            if (isDigit(ble.buffer[3]) &&
-                isDigit(ble.buffer[4]) &&
-                isDigit(ble.buffer[6]) &&
-                isDigit(ble.buffer[7]) &&
-                ble.buffer[5] == ':')
+            if (isDigit(espSerialPhoneBuffer[3]) &&
+                isDigit(espSerialPhoneBuffer[4]) &&
+                isDigit(espSerialPhoneBuffer[6]) &&
+                isDigit(espSerialPhoneBuffer[7]) &&
+                espSerialPhoneBuffer[5] == ':')
             {
-              strncpy(sStartTime, &ble.buffer[3], 5);
+              strncpy(sStartTime, &espSerialPhoneBuffer[3], 5);
               sStartTime[5] = '\0';
               bStartTimeOK = true;
             }
 
             if (bStartTimeOK == false)
-              SendString_ble_F(F("Bad start time, expected HH:MM\\n"));
+              SendString_ble_F(F("Bad start time, expected HH:MM\n"));
             else
               SendString_ble_F(F("Set start time = "));
               SendString_ble(sStartTime);
-              SendString_ble_F(F("\\n"));
+              SendString_ble_F(F("\n"));
 #if DEBUG_OUTPUT
             Serial.print("Set start time = ");
             Serial.println(sStartTime);
@@ -333,7 +363,7 @@ void loop(void)
           case 12:
               SendString_ble_F(F("Start time = "));
               SendString_ble(sStartTime);
-              SendString_ble_F(F("\\n"));
+              SendString_ble_F(F("\n"));
 #if DEBUG_OUTPUT
               Serial.print("Set start time = ");
               Serial.println(sStartTime);
@@ -343,19 +373,19 @@ void loop(void)
           case 13:
             if (strlen(sExecuteScript) == 0)
             {
-              SendString_ble_F(F("Script required!\\n"));
+              SendString_ble_F(F("Script required!\n"));
               break;
             }
             if (strlen(sStartTime) == 0)
             {
-              SendString_ble_F(F("Start time required!\\n"));
+              SendString_ble_F(F("Start time required!\n"));
               break;
             }
             bDoStartTime = true;
             lWaitTimeMS = millis();
             SendString_ble_F(F("Recording at start time = "));
             SendString_ble(sStartTime);
-            SendString_ble_F(F("\\n"));
+            SendString_ble_F(F("\n"));
 #if DEBUG_OUTPUT
             Serial.print("Recording at start time = ");
             Serial.println(sStartTime);
@@ -363,8 +393,8 @@ void loop(void)
             break;
             
           case 14:
-            SendString_ble_F(F("Turn ON daylight savings\\n"));
-            espSerial.print("3");
+            SendString_ble_F(F("Turn ON daylight savings\n"));
+            espSerialGoPro.print("3");
 #if DEBUG_OUTPUT
             Serial.print(F("Turn ON daylight savings"));
             Serial.println(sStartTime);
@@ -372,8 +402,8 @@ void loop(void)
             break;
             
           case 15:
-            SendString_ble_F(F("Turn OFF daylight savings\\n"));
-            espSerial.print("4");
+            SendString_ble_F(F("Turn OFF daylight savings\n"));
+            espSerialGoPro.print("4");
 #if DEBUG_OUTPUT
             Serial.print(F("Turn OFF daylight savings"));
             Serial.println(sStartTime);
@@ -390,62 +420,62 @@ void loop(void)
         }
 
       }
-      else if (ble.buffer[0] == '8')
+      else if (espSerialPhoneBuffer[0] == '8')
       {
-        ble.buffer[0] = ble.buffer[1];
-        ble.buffer[1] = 0;
-        espSerial.print(ble.buffer);
+        espSerialPhoneBuffer[0] = espSerialPhoneBuffer[1];
+        espSerialPhoneBuffer[1] = 0;
+        espSerialGoPro.print(espSerialPhoneBuffer);
 #if DEBUG_OUTPUT
         Serial.print("Sending GoPro Command: ");
-        Serial.println(ble.buffer);
+        Serial.println(espSerialPhoneBuffer);
 #endif
         SendString_ble_F(F("Sending GoPro Command: "));
-        SendString_ble(ble.buffer);
-        SendString_ble_F(F("\\n"));
+        SendString_ble(espSerialPhoneBuffer);
+        SendString_ble_F(F("\n"));
       }
-      else if (chCommand == 'F' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      else if (chCommand == 'F' && isDigit(espSerialPhoneBuffer[1]) && isDigit(espSerialPhoneBuffer[2]) && isDigit(espSerialPhoneBuffer[3]))
       {
-        iSteps = (ble.buffer[1] - '0') * 100;
-        iSteps += (ble.buffer[2] - '0') * 10;
-        iSteps += (ble.buffer[3] - '0');
+        iSteps = (espSerialPhoneBuffer[1] - '0') * 100;
+        iSteps += (espSerialPhoneBuffer[2] - '0') * 10;
+        iSteps += (espSerialPhoneBuffer[3] - '0');
 
         GoProMove(iXaxis, iYaxis + iSteps, true);
       }
-      else if (chCommand == 'B' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      else if (chCommand == 'B' && isDigit(espSerialPhoneBuffer[1]) && isDigit(espSerialPhoneBuffer[2]) && isDigit(espSerialPhoneBuffer[3]))
       {
-        iSteps = (ble.buffer[1] - '0') * 100;
-        iSteps += (ble.buffer[2] - '0') * 10;
-        iSteps += (ble.buffer[3] - '0');
+        iSteps = (espSerialPhoneBuffer[1] - '0') * 100;
+        iSteps += (espSerialPhoneBuffer[2] - '0') * 10;
+        iSteps += (espSerialPhoneBuffer[3] - '0');
 
         GoProMove(iXaxis, iYaxis - iSteps, true);
       }
-      else if (chCommand == 'L' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      else if (chCommand == 'L' && isDigit(espSerialPhoneBuffer[1]) && isDigit(espSerialPhoneBuffer[2]) && isDigit(espSerialPhoneBuffer[3]))
       {
-        iSteps = (ble.buffer[1] - '0') * 100;
-        iSteps += (ble.buffer[2] - '0') * 10;
-        iSteps += (ble.buffer[3] - '0');
+        iSteps = (espSerialPhoneBuffer[1] - '0') * 100;
+        iSteps += (espSerialPhoneBuffer[2] - '0') * 10;
+        iSteps += (espSerialPhoneBuffer[3] - '0');
 
         GoProMove(iXaxis + iSteps, iYaxis, true);
       }
-      else if (chCommand == 'R' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[2]) && isDigit(ble.buffer[3]))
+      else if (chCommand == 'R' && isDigit(espSerialPhoneBuffer[1]) && isDigit(espSerialPhoneBuffer[2]) && isDigit(espSerialPhoneBuffer[3]))
       {
-        iSteps = (ble.buffer[1] - '0') * 100;
-        iSteps += (ble.buffer[2] - '0') * 10;
-        iSteps += (ble.buffer[3] - '0');
+        iSteps = (espSerialPhoneBuffer[1] - '0') * 100;
+        iSteps += (espSerialPhoneBuffer[2] - '0') * 10;
+        iSteps += (espSerialPhoneBuffer[3] - '0');
 
         GoProMove(iXaxis - iSteps, iYaxis, true);
       }
-      else if (chCommand == 'W' && isDigit(ble.buffer[1]))
+      else if (chCommand == 'W' && isDigit(espSerialPhoneBuffer[1]))
       {
-        int iNextWellplate = (ble.buffer[1] - '0');
+        int iNextWellplate = (espSerialPhoneBuffer[1] - '0');
 
         GoProMove(WellplatesCoords[iNextWellplate - 1].x, WellplatesCoords[iNextWellplate - 1].y, true);
         iWellplate = iNextWellplate;
       }
-      else if (chCommand == 'C' && ble.buffer[2] == '-' && isDigit(ble.buffer[1]) && isDigit(ble.buffer[3]))
+      else if (chCommand == 'C' && espSerialPhoneBuffer[2] == '-' && isDigit(espSerialPhoneBuffer[1]) && isDigit(espSerialPhoneBuffer[3]))
       {
-        int iNextWellplate = (ble.buffer[1] - '0');
-        int iNextWellplateCell = (ble.buffer[3] - '0');
+        int iNextWellplate = (espSerialPhoneBuffer[1] - '0');
+        int iNextWellplateCell = (espSerialPhoneBuffer[3] - '0');
 
         if (iNextWellplate > 0 && iNextWellplate < 7 &&
             iNextWellplateCell > 0 && iNextWellplateCell < 7)
@@ -458,7 +488,7 @@ void loop(void)
           iWellplateCell = iNextWellplateCell;
         }
       }
-      else if (chCommand == 'X' && ble.buffer[1] == '=')
+      else if (chCommand == 'X' && espSerialPhoneBuffer[1] == '=')
       {
         int iRetCode = ProcessScript();
         if (iRetCode == 0)
@@ -484,7 +514,7 @@ void loop(void)
               break;
           }
         }
-        SendString_ble_F(F("\\n"));
+        SendString_ble_F(F("\n"));
       }
       else
       {
@@ -495,11 +525,11 @@ void loop(void)
       {
 #if DEBUG_OUTPUT
         Serial.print(F("Unrecognized command: "));
-        Serial.println(ble.buffer);
+        Serial.println(espSerialPhoneBuffer);
 #endif
         SendString_ble_F(F("Unrecognized command: "));
-        SendString_ble(ble.buffer);
-        SendString_ble_F(F("\\n"));
+        SendString_ble(espSerialPhoneBuffer);
+        SendString_ble_F(F("\n"));
         HelpDisplay();
       }
     }
@@ -529,9 +559,9 @@ void loop(void)
         {
           bDoStartTime = false;
           if (bPhotoMode)
-            SendString_ble_F(F("Start photos of cells\\n"));
+            SendString_ble_F(F("Start photos of cells\n"));
           else
-            SendString_ble_F(F("Start recording cells\\n"));
+            SendString_ble_F(F("Start recording cells\n"));
 #if DEBUG_OUTPUT
           Serial.println(F("Start recording cells"));
 #endif
@@ -543,15 +573,19 @@ void loop(void)
       lWaitTimeMS = millis();
       if (GetCommand())
       {
-        if (ble.buffer[0] == '9' && ble.buffer[1] == '9')
+
+#if DO_LOCAL_BLE  
+        if (espSerialPhoneBuffer[0] == '9' && espSerialPhoneBuffer[1] == '9')
         {
-          SendString_ble_F(F("  Start time aborted\\n"));
+          SendString_ble_F(F("  Start time aborted\n"));
           bDoStartTime = false;
         }
         else
         {
-          SendString_ble_F(F("  Commands ignored during start time wait\\n"));
+          SendString_ble_F(F("  Commands ignored during start time wait\n"));
         }
+#endif
+        
       }
     
     }
@@ -560,29 +594,45 @@ void loop(void)
   //  Serial.println("LOOP");
 }
 
+#if DO_LOCAL_BLE  
 boolean checkCRC(uint8_t sum, uint8_t CRCindex) {
-  for (uint8_t i = 2; i < CRCindex; i++) sum -= (uint8_t)ble.buffer[i];
-  return ((uint8_t)ble.buffer[CRCindex] == sum);
+  for (uint8_t i = 2; i < CRCindex; i++) sum -= (uint8_t)espSerialPhoneBuffer[i];
+  return ((uint8_t)espSerialPhoneBuffer[CRCindex] == sum);
 }
+#endif
 
 void SendString_ble(char *str)
 {
+
+#if DO_LOCAL_BLE    
   ble.print(F("AT+BLEUARTTX="));
   ble.println(str);
   // check response stastus
   if (! ble.waitForOK() ) {
     Serial.println(F("Failed to send?"));
   }
+#endif
+
+  espSerialPhone.print(str);
+  
 }
 
 void SendString_ble_F(const __FlashStringHelper *str)
 {
+
+#if DO_LOCAL_BLE  
   ble.print(F("AT+BLEUARTTX="));
   ble.println(str);
   // check response stastus
   if (! ble.waitForOK() ) {
     Serial.println(F("Failed to send?"));
   }
+#endif
+
+  espSerialPhone.print(str);
+
+//Serial.print("Send to phone: ");  
+Serial.print(str);  
 }
 
 void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
@@ -593,7 +643,7 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
   int iStyle = INTERLEAVE;
 
   if (iWait != 0)
-    SendString_ble_F(F("->Moving... please wait\\n"));
+    SendString_ble_F(F("->Moving... please wait\n"));
 
   iVal = 0;
   if (iNextXaxis > iXaxis)
@@ -644,8 +694,8 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
 
 //    if (WaitFor_y_axisSerial() == false)
 //      return;
-//    char cESP8266Byte = y_axisSerial.read();  
-//Serial.println(cESP8266Byte); 
+//    char cYaxisByte = y_axisSerial.read();  
+//Serial.println(cYaxisByte); 
 //Serial.println("DELAY");
 
     unsigned long ulDelayMS = (((unsigned long)iVal) / 5L) * 1000L;
@@ -660,21 +710,21 @@ bool GoProConnect()
 {
   int iTryCount = 0;
   
-  char cESP8266Byte = '\0';
+  char cEspSerialGoProByte = '\0';
 
   while (iTryCount++ < 3)
   {
     // Clear out any left over characters
-    while (espSerial.available() != 0)
+    while (espSerialGoPro.available() != 0)
     {
-      cESP8266Byte = espSerial.read();
+      cEspSerialGoProByte = espSerialGoPro.read();
     }
     
-    SendString_ble_F(F("->Connecting to GoPro... please wait\\n"));
-    espSerial.print("1");
+    SendString_ble_F(F("->Connecting to GoPro... please wait\n"));
+    espSerialGoPro.print("1");
     
     lStartTimeMS = millis();
-    while (espSerial.available() == 0)
+    while (espSerialGoPro.available() == 0)
     {
       delay(100);
       if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
@@ -682,23 +732,23 @@ bool GoProConnect()
         continue;
       }
     }
-    cESP8266Byte = espSerial.read();
-    if (cESP8266Byte != '1')
+    cEspSerialGoProByte = espSerialGoPro.read();
+    if (cEspSerialGoProByte != '1')
       continue;
   
     if (bPhotoMode)
     {
-      espSerial.print("P");
+      espSerialGoPro.print("P");
     }
     else
     {
-      espSerial.print("V");
+      espSerialGoPro.print("V");
     }
-    if (WaitForEspSerial() == false)
+    if (WaitForEspSerialGoPro() == false)
       continue;
         
-    cESP8266Byte = espSerial.read();
-    if (cESP8266Byte != '1')
+    cEspSerialGoProByte = espSerialGoPro.read();
+    if (cEspSerialGoProByte != '1')
       continue;
       
     return (true);
@@ -709,12 +759,12 @@ bool GoProConnect()
 
 bool GoProDisconnect()
 {  
-  espSerial.print("0");
+  espSerialGoPro.print("0");
   
-  if (WaitForEspSerial() == false)
+  if (WaitForEspSerialGoPro() == false)
     return (false);
-  char cESP8266Byte = espSerial.read();  
-  if (cESP8266Byte != '1')
+  char cEspSerialGoProByte = espSerialGoPro.read();  
+  if (cEspSerialGoProByte != '1')
     return (false);
     
   return (true);
@@ -722,7 +772,8 @@ bool GoProDisconnect()
 
 int ProcessScript()
 {
-  strcpy(sExecuteScript, &ble.buffer[2]);
+
+  strcpy(sExecuteScript, &espSerialPhoneBuffer[2]);
   strupr(sExecuteScript);
 #if DEBUG_OUTPUT
   Serial.println(sExecuteScript);
@@ -744,6 +795,7 @@ int ProcessScript()
     if (sExecuteScript[i + 2] != 'F' && sExecuteScript[i + 2] != 'R')
       return (-3);
   }
+  
   return (0);
 }
 
@@ -751,13 +803,13 @@ int ExecuteScript()
 {
   int iLen = strlen(sExecuteScript);
 
-  char cESP8266Byte = '1';
+  char cEspSerialGoProByte = '1';
 
   if (iGoProEnabled)
   {
     if (GoProConnect() == false)    
     {
-      SendString_ble_F(F("->GoPro connection **FAILED**\\n  Manually reset GoPro!\\n"));      
+      SendString_ble_F(F("->GoPro connection **FAILED**\n  Manually reset GoPro!\n"));      
 #if DEBUG_OUTPUT
       Serial.println(F(" FAILED"));
 #endif
@@ -810,10 +862,10 @@ int ExecuteScript()
       SendString_ble_F(F("-"));
       sNumb[0] = '0' + iWellplateCell;
       SendString_ble(sNumb);
-      SendString_ble_F(F("\\n"));
+      SendString_ble_F(F("\n"));
 
       if (iGoProEnabled)
-        espSerial.print("A");
+        espSerialGoPro.print("A");
 
       if (bPhotoMode)
       {
@@ -824,9 +876,11 @@ int ExecuteScript()
 ///////
         if (GetCommand())
         {
-          if (ble.buffer[0] == '9' && ble.buffer[1] == '9')
+
+#if DO_LOCAL_BLE  
+          if (espSerialPhoneBuffer[0] == '9' && espSerialPhoneBuffer[1] == '9')
           {
-            SendString_ble_F(F("  Photos aborted\\n"));
+            SendString_ble_F(F("  Photos aborted\n"));
             GoProMove(WellplatesCoords[0].x, WellplatesCoords[0].y, true);
             iWellplate = 1;
             iWellplateCell = 1;
@@ -834,8 +888,10 @@ int ExecuteScript()
           }
           else
           {
-            SendString_ble_F(F("  Commands ignored during photos\\n"));
+            SendString_ble_F(F("  Commands ignored during photos\n"));
           }
+#endif
+          
         }
 ///////
                 
@@ -852,13 +908,15 @@ int ExecuteScript()
           delay(1000);
           if (GetCommand())
           {
-            if (ble.buffer[0] == '9' && ble.buffer[1] == '9')
+
+#if DO_LOCAL_BLE              
+            if (espSerialPhoneBuffer[0] == '9' && espSerialPhoneBuffer[1] == '9')
             {
-              SendString_ble_F(F("  Recording aborted\\n"));
+              SendString_ble_F(F("  Recording aborted\n"));
               if (iGoProEnabled)
               {
-                espSerial.print("S");
-                espSerial.print("0");
+                espSerialGoPro.print("S");
+                espSerialGoPro.print("0");
               }
               GoProMove(WellplatesCoords[0].x, WellplatesCoords[0].y, true);
               iWellplate = 1;
@@ -867,8 +925,10 @@ int ExecuteScript()
             }
             else
             {
-              SendString_ble_F(F("  Commands ignored during recording\\n"));
+              SendString_ble_F(F("  Commands ignored during recording\n"));
             }
+#endif
+            
           }
         }
 #if DEBUG_OUTPUT
@@ -877,7 +937,7 @@ int ExecuteScript()
   
         if (iGoProEnabled)
         {
-          espSerial.print("S");
+          espSerialGoPro.print("S");
   
           //Delay while GoPro writes out recording to SDCard
           delay(5000);
@@ -907,29 +967,15 @@ int ExecuteScript()
 
 bool GetCommand()
 {
-  if (ble.isConnected())
-  {
-    ble.println(F("AT+BLEUARTRX")); // Request string from BLE module
-    ble.readline(); // Read outcome
-
-    if (strcmp(ble.buffer, "OK") != 0)
-    {
-      // Some data was found, its in the buffer
-#if DEBUG_OUTPUT
-      Serial.print(F("[Recv] "));
-      Serial.println(ble.buffer);
-#endif
-      ble.waitForOK();
-      return (true);
-    }
-  }
+  if (espSerialPhone.available() > 0)
+    return (true);
   return (false);
 }
 
-bool WaitForEspSerial()
+bool WaitForEspSerialGoPro()
 {
   lStartTimeMS = millis();
-  while (espSerial.available() == 0)
+  while (espSerialGoPro.available() == 0)
   {
     delay(100);
     if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
@@ -956,19 +1002,19 @@ bool WaitFor_y_axisSerial()
 
 bool GetNTP(char *buffer, bool bDisplay)
 {
-  while (espSerial.available() != 0)
+  while (espSerialGoPro.available() != 0)
   {
-    char cESP8266Byte = espSerial.read();
+    char cEspSerialGoProByte = espSerialGoPro.read();
   }
   for (int i=0; i<10; i++)
   {
     char tmpbuffer[20];
-    espSerial.print("2");
-    while (espSerial.available() == 0)
+    espSerialGoPro.print("2");
+    while (espSerialGoPro.available() == 0)
     {
       ;
     }
-    int iNmbBytes = espSerial.readBytes(tmpbuffer, sizeof(tmpbuffer));
+    int iNmbBytes = espSerialGoPro.readBytes(tmpbuffer, sizeof(tmpbuffer));
     tmpbuffer[19] = '\0';
 #if DEBUG_OUTPUT
     Serial.print("NTP string size = ");
@@ -984,7 +1030,7 @@ bool GetNTP(char *buffer, bool bDisplay)
     if (bDisplay)
     {
       SendString_ble(tmpbuffer);
-      SendString_ble_F(F("\\n"));
+      SendString_ble_F(F("\n"));
     }
     if (tmpbuffer[ 4] == '-' &&
         tmpbuffer[ 7] == '-' &&
@@ -1001,23 +1047,23 @@ bool GetNTP(char *buffer, bool bDisplay)
 
 void HelpDisplay()
 {
-  SendString_ble_F(F("\\nCommands:\\n"));
-  SendString_ble_F(F("  00 Start recording cells\\n"));
-  SendString_ble_F(F("  01 Recording time 5 sec\\n"));
-  SendString_ble_F(F("  02 Recording time 3 min\\n"));
-  SendString_ble_F(F("  03 Recording time 5 min\\n"));
-  SendString_ble_F(F("  04 Disable GoPro, slider only\\n"));
-  SendString_ble_F(F("  05 Enable GoPro\\n"));
-  SendString_ble_F(F("  06 Video Mode GoPro\\n"));
-  SendString_ble_F(F("  07 Photo Mode GoPro\\n"));
-  SendString_ble_F(F("  08 Test GoPro Connect\Disconnect\\n"));
-  SendString_ble_F(F("  09 Get NTP current time\\n"));
-  SendString_ble_F(F("  10 Script display\\n"));
-  SendString_ble_F(F("  11 Set start time HH:MM\\n"));
-  SendString_ble_F(F("  12 Display start time\\n"));
-  SendString_ble_F(F("  13 Begin recording at start time\\n"));
-  SendString_ble_F(F("  14 Turn ON daylight time\\n"));
-  SendString_ble_F(F("  15 Turn OFF daylight time\\n"));
-  SendString_ble_F(F("  99 Abort recording cells\\n"));
-  SendString_ble_F(F("  X= Script ('wrd')\\n"));
+  SendString_ble_F(F("\nCommands:\n"));
+  SendString_ble_F(F("  00 Start recording cells\n"));
+  SendString_ble_F(F("  01 Recording time 5 sec\n"));
+  SendString_ble_F(F("  02 Recording time 3 min\n"));
+  SendString_ble_F(F("  03 Recording time 5 min\n"));
+  SendString_ble_F(F("  04 Disable GoPro, slider only\n"));
+  SendString_ble_F(F("  05 Enable GoPro\n"));
+  SendString_ble_F(F("  06 Video Mode GoPro\n"));
+  SendString_ble_F(F("  07 Photo Mode GoPro\n"));
+  SendString_ble_F(F("  08 Test GoPro Connect\Disconnect\n"));
+  SendString_ble_F(F("  09 Get NTP current time\n"));
+  SendString_ble_F(F("  10 Script display\n"));
+  SendString_ble_F(F("  11 Set start time HH:MM\n"));
+  SendString_ble_F(F("  12 Display start time\n"));
+  SendString_ble_F(F("  13 Begin recording at start time\n"));
+  SendString_ble_F(F("  14 Turn ON daylight time\n"));
+  SendString_ble_F(F("  15 Turn OFF daylight time\n"));
+  SendString_ble_F(F("  99 Abort recording cells\n"));
+  SendString_ble_F(F("  X= Script ('wrd')\n"));
 }
