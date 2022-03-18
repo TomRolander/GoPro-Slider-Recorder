@@ -224,9 +224,12 @@ void loop(void)
     {
       espSerialPhoneBuffer[iNext++] = espSerialPhone.read();
     }
+    espSerialPhoneBuffer[iNext] = '\0';
 
 #if DEBUG_OUTPUT
+Serial.print("espSerialPhoneBuffer = [");
 Serial.print(espSerialPhoneBuffer);
+Serial.println("]");
 #endif
     
     {
@@ -708,6 +711,10 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
 
 bool GoProConnect()
 {
+
+#if 1
+return (true);
+#else  
   int iTryCount = 0;
   
   char cEspSerialGoProByte = '\0';
@@ -755,10 +762,12 @@ bool GoProConnect()
   }
 
   return (false);
+#endif
 }
 
 bool GoProDisconnect()
-{  
+{
+#if 0  
   espSerialGoPro.print("0");
   
   if (WaitForEspSerialGoPro() == false)
@@ -766,7 +775,7 @@ bool GoProDisconnect()
   char cEspSerialGoProByte = espSerialGoPro.read();  
   if (cEspSerialGoProByte != '1')
     return (false);
-    
+#endif    
   return (true);
 }
 
@@ -865,8 +874,19 @@ int ExecuteScript()
       SendString_ble_F(F("\n"));
 
       if (iGoProEnabled)
-        espSerialGoPro.print("A");
-
+      {
+//        espSerialGoPro.print("A");
+        char tmpbuffer[50];
+        espSerialPhone.print('\x1B');
+        delay(500);
+        espSerialPhone.print("A");
+        while (espSerialPhone.available() == 0)
+        {
+          ;
+        }
+        int iNmbBytes = espSerialPhone.readBytes(tmpbuffer, sizeof(tmpbuffer));
+        tmpbuffer[iNmbBytes] = '\0';
+      }
       if (bPhotoMode)
       {
 #if DEBUG_OUTPUT
@@ -937,7 +957,18 @@ int ExecuteScript()
   
         if (iGoProEnabled)
         {
-          espSerialGoPro.print("S");
+          
+          //espSerialGoPro.print("S");
+          char tmpbuffer[50];
+          espSerialPhone.print('\x1B');
+          delay(500);
+          espSerialPhone.print("S");
+          while (espSerialPhone.available() == 0)
+          {
+            ;
+          }
+          int iNmbBytes = espSerialPhone.readBytes(tmpbuffer, sizeof(tmpbuffer));
+          tmpbuffer[iNmbBytes] = '\0';
   
           //Delay while GoPro writes out recording to SDCard
           delay(5000);
@@ -1002,25 +1033,48 @@ bool WaitFor_y_axisSerial()
 
 bool GetNTP(char *buffer, bool bDisplay)
 {
+  // clear buffer
   while (espSerialGoPro.available() != 0)
   {
     char cEspSerialGoProByte = espSerialGoPro.read();
   }
-  for (int i=0; i<10; i++)
+
+  
+  for (int i=0; i<5; i++)
   {
-    char tmpbuffer[20];
+    char tmpbuffer[50];
+    
+#if 1
+    espSerialPhone.print('\x1B');
+    delay(500);
+    espSerialPhone.print("2");
+    while (espSerialPhone.available() == 0)
+    {
+      ;
+    }
+    int iNmbBytes = espSerialPhone.readBytes(tmpbuffer, sizeof(tmpbuffer));
+    tmpbuffer[iNmbBytes] = '\0';
+#if 0
+Serial.print("iNmbBytes = ");
+Serial.println(iNmbBytes);
+Serial.print("tmpbuffer = [");
+Serial.print(tmpbuffer);
+Serial.println("]");
+#endif    
+#else
     espSerialGoPro.print("2");
     while (espSerialGoPro.available() == 0)
     {
       ;
     }
     int iNmbBytes = espSerialGoPro.readBytes(tmpbuffer, sizeof(tmpbuffer));
+#endif
     tmpbuffer[19] = '\0';
 #if DEBUG_OUTPUT
     Serial.print("NTP string size = ");
     Serial.println(iNmbBytes);
 #endif
-    if (iNmbBytes != 20)
+    if (iNmbBytes != 19)
       continue;
 #if DEBUG_OUTPUT
     Serial.print("NTP = ");
