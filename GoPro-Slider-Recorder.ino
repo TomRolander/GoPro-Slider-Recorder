@@ -59,7 +59,7 @@
 
 SoftwareSerial y_axisSerial(3, 2);
 
-SoftwareSerial espSerialGoPro(5, 4);
+//SoftwareSerial espSerialGoPro(5, 4);
 
 SoftwareSerial espSerialPhone(7, 6);
 
@@ -146,7 +146,7 @@ void setup(void) {
   delay(5000);
 
   y_axisSerial.begin(1200);
-  espSerialGoPro.begin(1200);
+  //espSerialGoPro.begin(1200);
   espSerialPhone.begin(1200);
 
   delay(5000);
@@ -397,7 +397,7 @@ Serial.println("]");
             
           case 14:
             SendString_ble_F(F("Turn ON daylight savings\n"));
-            espSerialGoPro.print("3");
+            espSerialPhone.print("3");
 #if DEBUG_OUTPUT
             Serial.print(F("Turn ON daylight savings"));
             Serial.println(sStartTime);
@@ -406,7 +406,7 @@ Serial.println("]");
             
           case 15:
             SendString_ble_F(F("Turn OFF daylight savings\n"));
-            espSerialGoPro.print("4");
+            espSerialPhone.print("4");
 #if DEBUG_OUTPUT
             Serial.print(F("Turn OFF daylight savings"));
             Serial.println(sStartTime);
@@ -423,11 +423,12 @@ Serial.println("]");
         }
 
       }
+#if 0      
       else if (espSerialPhoneBuffer[0] == '8')
       {
         espSerialPhoneBuffer[0] = espSerialPhoneBuffer[1];
         espSerialPhoneBuffer[1] = 0;
-        espSerialGoPro.print(espSerialPhoneBuffer);
+        espSerialPhone.print(espSerialPhoneBuffer);
 #if DEBUG_OUTPUT
         Serial.print("Sending GoPro Command: ");
         Serial.println(espSerialPhoneBuffer);
@@ -436,6 +437,7 @@ Serial.println("]");
         SendString_ble(espSerialPhoneBuffer);
         SendString_ble_F(F("\n"));
       }
+#endif      
       else if (chCommand == 'F' && isDigit(espSerialPhoneBuffer[1]) && isDigit(espSerialPhoneBuffer[2]) && isDigit(espSerialPhoneBuffer[3]))
       {
         iSteps = (espSerialPhoneBuffer[1] - '0') * 100;
@@ -717,21 +719,21 @@ return (true);
 #else  
   int iTryCount = 0;
   
-  char cEspSerialGoProByte = '\0';
+  char cEspSerialPhoneByte = '\0';
 
   while (iTryCount++ < 3)
   {
     // Clear out any left over characters
-    while (espSerialGoPro.available() != 0)
+    while (espSerialPhone.available() != 0)
     {
-      cEspSerialGoProByte = espSerialGoPro.read();
+      cEspSerialPhoneByte = espSerialPhone.read();
     }
     
     SendString_ble_F(F("->Connecting to GoPro... please wait\n"));
-    espSerialGoPro.print("1");
+    espSerialPhone.print("1");
     
     lStartTimeMS = millis();
-    while (espSerialGoPro.available() == 0)
+    while (espSerialPhone.available() == 0)
     {
       delay(100);
       if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
@@ -739,23 +741,23 @@ return (true);
         continue;
       }
     }
-    cEspSerialGoProByte = espSerialGoPro.read();
-    if (cEspSerialGoProByte != '1')
+    cEspSerialPhoneByte = espSerialPhone.read();
+    if (cEspSerialPhoneByte != '1')
       continue;
   
     if (bPhotoMode)
     {
-      espSerialGoPro.print("P");
+      espSerialPhone.print("P");
     }
     else
     {
-      espSerialGoPro.print("V");
+      espSerialPhone.print("V");
     }
-    if (WaitForEspSerialGoPro() == false)
+    if (WaitForespSerialPhone() == false)
       continue;
         
-    cEspSerialGoProByte = espSerialGoPro.read();
-    if (cEspSerialGoProByte != '1')
+    cEspSerialPhoneByte = espSerialPhone.read();
+    if (cEspSerialPhoneByte != '1')
       continue;
       
     return (true);
@@ -768,12 +770,14 @@ return (true);
 bool GoProDisconnect()
 {
 #if 0  
-  espSerialGoPro.print("0");
+  espSerialPhone.print('\x1B');
+  delay(500);
+  espSerialPhone.print("0");
   
-  if (WaitForEspSerialGoPro() == false)
+  if (WaitForespSerialPhone() == false)
     return (false);
-  char cEspSerialGoProByte = espSerialGoPro.read();  
-  if (cEspSerialGoProByte != '1')
+  char cEspSerialPhoneByte = espSerialPhone.read();  
+  if (cEspSerialPhoneByte != '1')
     return (false);
 #endif    
   return (true);
@@ -812,7 +816,7 @@ int ExecuteScript()
 {
   int iLen = strlen(sExecuteScript);
 
-  char cEspSerialGoProByte = '1';
+  char cEspSerialPhoneByte = '1';
 
   if (iGoProEnabled)
   {
@@ -875,7 +879,7 @@ int ExecuteScript()
 
       if (iGoProEnabled)
       {
-//        espSerialGoPro.print("A");
+//        espSerialPhone.print("A");
         char tmpbuffer[50];
         espSerialPhone.print('\x1B');
         delay(500);
@@ -886,6 +890,12 @@ int ExecuteScript()
         }
         int iNmbBytes = espSerialPhone.readBytes(tmpbuffer, sizeof(tmpbuffer));
         tmpbuffer[iNmbBytes] = '\0';
+#if DEBUG_OUTPUT
+      Serial.print("Response [");
+      Serial.print(tmpbuffer);
+      Serial.println("]");
+#endif
+        
       }
       if (bPhotoMode)
       {
@@ -935,8 +945,8 @@ int ExecuteScript()
               SendString_ble_F(F("  Recording aborted\n"));
               if (iGoProEnabled)
               {
-                espSerialGoPro.print("S");
-                espSerialGoPro.print("0");
+                espSerialPhone.print("S");
+                espSerialPhone.print("0");
               }
               GoProMove(WellplatesCoords[0].x, WellplatesCoords[0].y, true);
               iWellplate = 1;
@@ -958,7 +968,7 @@ int ExecuteScript()
         if (iGoProEnabled)
         {
           
-          //espSerialGoPro.print("S");
+          //espSerialPhone.print("S");
           char tmpbuffer[50];
           espSerialPhone.print('\x1B');
           delay(500);
@@ -1003,10 +1013,10 @@ bool GetCommand()
   return (false);
 }
 
-bool WaitForEspSerialGoPro()
+bool WaitForespSerialPhone()
 {
   lStartTimeMS = millis();
-  while (espSerialGoPro.available() == 0)
+  while (espSerialPhone.available() == 0)
   {
     delay(100);
     if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
@@ -1034,9 +1044,9 @@ bool WaitFor_y_axisSerial()
 bool GetNTP(char *buffer, bool bDisplay)
 {
   // clear buffer
-  while (espSerialGoPro.available() != 0)
+  while (espSerialPhone.available() != 0)
   {
-    char cEspSerialGoProByte = espSerialGoPro.read();
+    char cEspSerialPhoneByte = espSerialPhone.read();
   }
 
   
@@ -1062,12 +1072,12 @@ Serial.print(tmpbuffer);
 Serial.println("]");
 #endif    
 #else
-    espSerialGoPro.print("2");
-    while (espSerialGoPro.available() == 0)
+    espSerialPhone.print("2");
+    while (espSerialPhone.available() == 0)
     {
       ;
     }
-    int iNmbBytes = espSerialGoPro.readBytes(tmpbuffer, sizeof(tmpbuffer));
+    int iNmbBytes = espSerialPhone.readBytes(tmpbuffer, sizeof(tmpbuffer));
 #endif
     tmpbuffer[19] = '\0';
 #if DEBUG_OUTPUT
