@@ -27,7 +27,6 @@
 
 #define DEBUG_OUTPUT 1
 
-#define DO_LOCAL_BLE  0
 #define DO_REMOTE_BLE 1
 
 // Smartphone- or tablet-activated timelapse camera slider.
@@ -49,13 +48,6 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include <Adafruit_MotorShield.h>
-
-#if DO_LOCAL_BLE
-#include <Adafruit_BluefruitLE_SPI.h>
-#include <Adafruit_BluefruitLE_UART.h>
-#endif
-
-#include "BluefruitConfig.h"
 
 SoftwareSerial y_axisSerial(3, 2);
 
@@ -96,7 +88,8 @@ static struct WellplateCoord WellplatesCoords[6] =
   {720, 258}
 };
 
-#define RECORDING_TIME_5_SEC (5000L + 1000L)
+//#define RECORDING_TIME_5_SEC (5000L + 1000L)
+#define RECORDING_TIME_5_SEC (5000L - 250L)
 #define RECORDING_TIME_3_MIN (180000L + 1000L)
 #define RECORDING_TIME_5_MIN (300000L + 1000L)
 #define RECORDING_TIME_5_SEC_STRING "5 Sec"
@@ -125,12 +118,6 @@ int iGoProEnabled = true;
 
 char sExecuteScript[128] = "";
 
-#if DO_LOCAL_BLE
-// Bluefruit config --------------------------------------------------------
-Adafruit_BluefruitLE_SPI ble(8, 7, 6); // CS, IRQ, RST pins
-//Adafruit_BluefruitLE_SPI ble(8, 7, -1); // CS, IRQ, RST pins
-#endif
-
 // Stepper motor config ----------------------------------------------------
 #define STEPPER_STEPS 1100 // Length of slider
 #define STEPPER_RPM 20
@@ -145,7 +132,7 @@ void setup(void) {
 
   y_axisSerial.begin(1200);
   //espSerialGoPro.begin(1200);
-  esp32Serial.begin(1200);
+  esp32Serial.begin(600);
 
   // Flush serial buffer
   while (esp32Serial.available() > 0)
@@ -162,24 +149,9 @@ void setup(void) {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH); // LED steady on during init
 
-#if DO_LOCAL_BLE  
-  if (!ble.begin(false))
-    for (;;); // BLE init error? LED on forever
-  ble.echo(false);
-#endif
-
   Serial.println(F("Please use Adafruit Bluefruit LE app to connect in UART mode"));
   Serial.println(F("Then Enter characters to send to Bluefruit"));
   Serial.println();
-
-#if DO_LOCAL_BLE  
-  ble.verbose(false);  // debug info is a little annoying after this point!
-
-  /* Wait for connection */
-  while (! ble.isConnected()) {
-    delay(500);
-  }
-#endif
 
   delay(10000);
 
@@ -306,12 +278,16 @@ Serial.println("]");
             iGoProEnabled = true;
             break;
 
+          // Video mode
           case 6:
             bPhotoMode = false;
+            SendGoProCommand('V');
             break;
             
+          // Photo mode
           case 7:
             bPhotoMode = true;
+            SendGoProCommand('P');
             break;
             
           case 8:
@@ -402,7 +378,7 @@ Serial.println("]");
             
           case 14:
             SendString_ble_F(F("Turn ON daylight savings\n"));
-            esp32Serial.print("3");
+            SendGoProCommand('3');
 #if DEBUG_OUTPUT
             Serial.print(F("Turn ON daylight savings"));
             Serial.println(sStartTime);
@@ -411,7 +387,7 @@ Serial.println("]");
             
           case 15:
             SendString_ble_F(F("Turn OFF daylight savings\n"));
-            esp32Serial.print("4");
+            SendGoProCommand('4');
 #if DEBUG_OUTPUT
             Serial.print(F("Turn OFF daylight savings"));
             Serial.println(sStartTime);
@@ -586,20 +562,12 @@ Serial.println("]");
 
         if (esp32SerialBuffer[0] == '9' && esp32SerialBuffer[1] == '9')
         {
-#if DO_LOCAL_BLE  
-          SendString_ble_F(F("  Start time aborted\n"));
-#else        
-         esp32Serial.print(F("  Start time aborted\n"));
-#endif          
+          esp32Serial.print(F("  Start time aborted\n"));
           bDoStartTime = false;
         }
         else
         {
-#if DO_LOCAL_BLE  
-          SendString_ble_F(F("  Commands ignored during start time wait\n"));
-#else
           esp32Serial.print(F("  Commands ignored during start time wait\n"));
-#endif
         }        
       }
     
@@ -609,41 +577,13 @@ Serial.println("]");
   //  Serial.println("LOOP");
 }
 
-#if DO_LOCAL_BLE  
-boolean checkCRC(uint8_t sum, uint8_t CRCindex) {
-  for (uint8_t i = 2; i < CRCindex; i++) sum -= (uint8_t)esp32SerialBuffer[i];
-  return ((uint8_t)esp32SerialBuffer[CRCindex] == sum);
-}
-#endif
-
 void SendString_ble(char *str)
 {
-
-#if DO_LOCAL_BLE    
-  ble.print(F("AT+BLEUARTTX="));
-  ble.println(str);
-  // check response stastus
-  if (! ble.waitForOK() ) {
-    Serial.println(F("Failed to send?"));
-  }
-#endif
-
   esp32Serial.print(str);
-  
 }
 
 void SendString_ble_F(const __FlashStringHelper *str)
 {
-
-#if DO_LOCAL_BLE  
-  ble.print(F("AT+BLEUARTTX="));
-  ble.println(str);
-  // check response stastus
-  if (! ble.waitForOK() ) {
-    Serial.println(F("Failed to send?"));
-  }
-#endif
-
   esp32Serial.print(str);
 
 //Serial.print("Send to phone: ");  
@@ -721,76 +661,61 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
   iYaxis = iNextYaxis;
 }
 
-bool GoProConnect()
+bool SendGoProCommand(char cCommand)
 {
-
-#if 1
-return (true);
-#else  
-  int iTryCount = 0;
+  bool bRetCode = true;
+  esp32Serial.print('\x1B');
+  delay(500);
+  esp32Serial.print(cCommand);
   
-  char cesp32SerialByte = '\0';
-
-  while (iTryCount++ < 3)
+  if (WaitForesp32Serial() == false)
+    bRetCode = false;
+  else
   {
-    // Clear out any left over characters
-    while (esp32Serial.available() != 0)
-    {
-      cesp32SerialByte = esp32Serial.read();
-    }
-    
-    SendString_ble_F(F("->Connecting to GoPro... please wait\n"));
-    esp32Serial.print("1");
-    
-    lStartTimeMS = millis();
-    while (esp32Serial.available() == 0)
-    {
-      delay(100);
-      if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
-      {
-        continue;
-      }
-    }
-    cesp32SerialByte = esp32Serial.read();
+    char cesp32SerialByte = esp32Serial.read();  
     if (cesp32SerialByte != '1')
-      continue;
-  
-    if (bPhotoMode)
-    {
-      esp32Serial.print("P");
-    }
-    else
-    {
-      esp32Serial.print("V");
-    }
-    if (WaitForesp32Serial() == false)
-      continue;
-        
-    cesp32SerialByte = esp32Serial.read();
-    if (cesp32SerialByte != '1')
-      continue;
-      
-    return (true);
+      bRetCode = false;
   }
 
-  return (false);
+#if DEBUG_OUTPUT
+  Serial.print("GOPRO Escape [");
+  Serial.print(cCommand);
+  Serial.print("] ");
+  if (bRetCode)
+    Serial.println("Success");
+  else
+    Serial.println("Failure");
 #endif
+
+  return (bRetCode);  
+}
+
+bool GoProConnect()
+{
+  bool bRetCode;
+#if DEBUG_OUTPUT  
+  Serial.println("CONNECT");
+#endif
+
+  if (bPhotoMode)
+    bRetCode = SendGoProCommand('P');
+  else
+    bRetCode = SendGoProCommand('V');
+
+  if (bRetCode)
+    bRetCode = SendGoProCommand('1');  
+  return (bRetCode);
 }
 
 bool GoProDisconnect()
 {
-#if 0  
-  esp32Serial.print('\x1B');
-  delay(500);
-  esp32Serial.print("0");
-  
-  if (WaitForesp32Serial() == false)
-    return (false);
-  char cesp32SerialByte = esp32Serial.read();  
-  if (cesp32SerialByte != '1')
-    return (false);
-#endif    
-  return (true);
+  bool bRetCode;
+#if DEBUG_OUTPUT  
+  Serial.println("DISCONNECT");
+#endif
+
+  bRetCode = SendGoProCommand('0');  
+  return (bRetCode);
 }
 
 int ProcessScript()
@@ -889,23 +814,7 @@ int ExecuteScript()
 
       if (iGoProEnabled)
       {
-//        esp32Serial.print("A");
-        char tmpbuffer[50];
-        esp32Serial.print('\x1B');
-        delay(500);
-        esp32Serial.print("A");
-        while (esp32Serial.available() == 0)
-        {
-          ;
-        }
-        int iNmbBytes = esp32Serial.readBytes(tmpbuffer, sizeof(tmpbuffer));
-        tmpbuffer[iNmbBytes] = '\0';
-#if DEBUG_OUTPUT
-      Serial.print("Response [");
-      Serial.print(tmpbuffer);
-      Serial.println("]");
-#endif
-        
+        bool bRetCode = SendGoProCommand('A');
       }
       if (bPhotoMode)
       {
@@ -919,11 +828,7 @@ int ExecuteScript()
 
           if (esp32SerialBuffer[0] == '9' && esp32SerialBuffer[1] == '9')
           {
-#if DO_LOCAL_BLE  
-            SendString_ble_F(F("  Photos aborted\n"));
-#else 
             esp32Serial.print(F("  Photos aborted\n"));           
-#endif
             GoProMove(WellplatesCoords[0].x, WellplatesCoords[0].y, true);
             iWellplate = 1;
             iWellplateCell = 1;
@@ -931,11 +836,7 @@ int ExecuteScript()
           }
           else
           {
-#if DO_LOCAL_BLE  
-            SendString_ble_F(F("  Commands ignored during photos\n"));
-#else
             esp32Serial.print(F("  Commands ignored during photos\n"));
-#endif
           }
           
         }
@@ -952,16 +853,13 @@ int ExecuteScript()
         while ((millis() - lStartTimeMS) < lCurrentTimeDelay)
         {
           delay(1000);
+#if 1          
           if (GetCommand())
           {
 
             if (esp32SerialBuffer[0] == '9' && esp32SerialBuffer[1] == '9')
             {
-#if DO_LOCAL_BLE              
-              SendString_ble_F(F("  Recording aborted\n"));
-#else
               esp32Serial.print(F("  Recording aborted\n"));
-#endif              
               if (iGoProEnabled)
               {
                 esp32Serial.print("S");
@@ -974,35 +872,18 @@ int ExecuteScript()
             }
             else
             {
-#if DO_LOCAL_BLE              
-              SendString_ble_F(F("  Commands ignored during recording\n"));
-#else
               esp32Serial.print(F("  Commands ignored during recording\n"));
-#endif              
             }            
           }
+#endif          
         }
 #if DEBUG_OUTPUT
         Serial.println(F("Record Video STOP"));
 #endif
   
         if (iGoProEnabled)
-        {
-          
-          //esp32Serial.print("S");
-          char tmpbuffer[50];
-          esp32Serial.print('\x1B');
-          delay(500);
-          esp32Serial.print("S");
-          while (esp32Serial.available() == 0)
-          {
-            ;
-          }
-          int iNmbBytes = esp32Serial.readBytes(tmpbuffer, sizeof(tmpbuffer));
-          tmpbuffer[iNmbBytes] = '\0';
-  
-          //Delay while GoPro writes out recording to SDCard
-          delay(5000);
+        {   
+          bool bRetCode = SendGoProCommand('S');
         }
 #if DEBUG_OUTPUT
         Serial.println("RECORD End");
@@ -1075,7 +956,6 @@ bool GetNTP(char *buffer, bool bDisplay)
   {
     char tmpbuffer[50];
     
-#if 1
     esp32Serial.print('\x1B');
     delay(500);
     esp32Serial.print("2");
@@ -1085,21 +965,6 @@ bool GetNTP(char *buffer, bool bDisplay)
     }
     int iNmbBytes = esp32Serial.readBytes(tmpbuffer, sizeof(tmpbuffer));
     tmpbuffer[iNmbBytes] = '\0';
-#if 0
-Serial.print("iNmbBytes = ");
-Serial.println(iNmbBytes);
-Serial.print("tmpbuffer = [");
-Serial.print(tmpbuffer);
-Serial.println("]");
-#endif    
-#else
-    esp32Serial.print("2");
-    while (esp32Serial.available() == 0)
-    {
-      ;
-    }
-    int iNmbBytes = esp32Serial.readBytes(tmpbuffer, sizeof(tmpbuffer));
-#endif
     tmpbuffer[19] = '\0';
 #if DEBUG_OUTPUT
     Serial.print("NTP string size = ");
