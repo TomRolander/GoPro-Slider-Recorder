@@ -23,7 +23,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
-#define VERSION "Ver 0.9 2022-03-10"
+#define VERSION "Ver 0.9 2022-03-27"
 
 #define DEBUG_OUTPUT 1
 
@@ -128,7 +128,7 @@ Adafruit_StepperMotor *motor = AFMS.getStepper(200, 2);
 // Setup function - runs once at startup -----------------------------------
 void setup(void) {
   Serial.begin(115200);
-  delay(5000);
+  delay(1000);
 
   y_axisSerial.begin(1200);
   //espSerialGoPro.begin(1200);
@@ -141,7 +141,7 @@ void setup(void) {
   }
   
 
-  delay(5000);
+  //delay(5000);
   Serial.println("");
   Serial.println(F(PROGRAM));
   Serial.println(F(VERSION));
@@ -153,10 +153,12 @@ void setup(void) {
   Serial.println(F("Then Enter characters to send to Bluefruit"));
   Serial.println();
 
-  delay(10000);
+  delay(1000);
 
-  SendString_ble_F(F("GoPro Slider Recorder\nVer "));
-  SendString_ble(VERSION);
+  SendString_ble_F(F("\n\n"));
+  SendString_ble_F(F(PROGRAM));
+  SendString_ble_F(F("\n"));
+  SendString_ble_F(F(VERSION));
   SendString_ble_F(F("\n"));
   HelpDisplay();
 
