@@ -100,6 +100,7 @@ static struct WellplateCoord WellplatesCoords[6] =
 #define DEFAULT_RECORDING_TIME_MS RECORDING_TIME_5_SEC
 
 #define GOPRO_CONNECT_TIMEOUT 30000L
+#define Y_AXIS_TIMEOUT        75000L
 
 #define CHECK_NTP 30000L
 
@@ -639,17 +640,25 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
     y_axisSerial.print(sParam);
 #endif
 
-//Serial.print("Wait for completion = ");
+    y_axisSerial.listen();
+    
+Serial.print("Wait for completion = ");
     //iState = STATE_WAITING_FOR_COMPLETION;
 
-//    if (WaitFor_y_axisSerial() == false)
-//      return;
-//    char cYaxisByte = y_axisSerial.read();  
-//Serial.println(cYaxisByte); 
-//Serial.println("DELAY");
+    if (WaitFor_y_axisSerial() == false)
+    {
+      esp32Serial.listen();
+      return;
+    }
+    
+    char cYaxisByte = y_axisSerial.read();  
+Serial.println(cYaxisByte); 
+Serial.println("DELAY");
 
-    unsigned long ulDelayMS = (((unsigned long)iVal) / 5L) * 1000L;
-    delay(ulDelayMS);
+    esp32Serial.listen();
+
+    //unsigned long ulDelayMS = (((unsigned long)iVal) / 5L) * 1000L;
+    //delay(ulDelayMS);
   }
 
   iXaxis = iNextXaxis;
@@ -943,15 +952,17 @@ bool WaitForesp32Serial()
   return (true);
 }
 
-#if 0
+#if 1
 bool WaitFor_y_axisSerial()
 {
   lStartTimeMS = millis();
   while (y_axisSerial.available() == 0)
   {
     delay(100);
-    if (millis() > (lStartTimeMS + GOPRO_CONNECT_TIMEOUT))
+    if (millis() > (lStartTimeMS + Y_AXIS_TIMEOUT))
     {
+      Serial.println("Y-Axis move TIMEOUT");
+      SendString_ble_F(F("Y-Axis move TIMEOUT\n"));
       return (false);
     }
   }  
