@@ -50,22 +50,22 @@ static char esp32SerialBuffer[128] = "";
 
 static bool bPhotoMode = false;
 
-long lStartTimeMS = 0;
-long lWaitTimeMS = 0;
+static long lStartTimeMS = 0;
+static long lWaitTimeMS = 0;
 
-bool  bDoStartTime = false;
-char  sStartTime[6] = "";
+static bool  bDoStartTime = false;
+static char  sStartTime[6] = "";
 
 static bool bWaitingForGoPro = false;
 
-char sCurrentNTP[20] = "";
+static char sCurrentNTP[20] = "";
 
-int iSteps = 0;
+static int iSteps = 0;
 
-int iXaxis = 0;
-int iYaxis = 0;
-int iWellplate = 1;
-int iWellplateCell = 1;
+static int iXaxis = 0;
+static int iYaxis = 0;
+static int iWellplate = 1;
+static int iWellplateCell = 1;
 
 struct WellplateCoord
 {
@@ -106,12 +106,12 @@ char sRecordingTime[32] = RECORDING_TIME_5_SEC_STRING;
 #define DEFAULT_CELL_STEP_SIZE 110
 #define DEFAULT_GAP_STEP_SIZE (110+30)
 
-int iShowCommand = true;
+static int iShowCommand = true;
 
-int iGoProEnabled = true;
+static int iGoProEnabled = true;
 
 
-char sExecuteScript[128] = "";
+static char sExecuteScript[128] = "";
 
 // Stepper motor config ----------------------------------------------------
 #define STEPPER_STEPS 1100 // Length of slider
@@ -149,6 +149,22 @@ void setup(void) {
   Serial.println();
 
   delay(1000);
+
+#if 0
+  // Wait for 'X' from GoPro Video and Phone Controller
+  while (true)
+  {
+    if (esp32Serial.available() > 0)
+    {
+      char cChar = esp32Serial.read();
+      if (cChar == 'X')
+      {
+        esp32Serial.print('Y');
+      }
+    }
+  }
+#endif
+  
 
   SendString_ble_F(F("\n\n"));
   SendString_ble_F(F(PROGRAM));
