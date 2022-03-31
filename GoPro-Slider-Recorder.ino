@@ -48,13 +48,15 @@ SoftwareSerial esp32Serial(6, 7);
 static char esp32SerialBuffer[128] = "";
 
 
-bool bPhotoMode = false;
+static bool bPhotoMode = false;
 
 long lStartTimeMS = 0;
 long lWaitTimeMS = 0;
 
 bool  bDoStartTime = false;
 char  sStartTime[6] = "";
+
+static bool bWaitingForGoPro = false;
 
 char sCurrentNTP[20] = "";
 
@@ -645,6 +647,7 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
 bool SendGoProCommand(char cCommand)
 {
   bool bRetCode = true;
+  bWaitingForGoPro = true;
   esp32Serial.print('\x1B');
   delay(500);
   esp32Serial.print(cCommand);
@@ -668,6 +671,7 @@ bool SendGoProCommand(char cCommand)
     Serial.println("Failure");
 #endif
 
+  bWaitingForGoPro = false;
   return (bRetCode);
 }
 
@@ -886,6 +890,16 @@ int ExecuteScript()
 
 bool GetCommand(char *pesp32SerialBuffer, int esp32SerialBufferLen)
 {
+#if 1
+  if (bWaitingForGoPro)
+  {
+#if DEBUG_OUTPUT
+      Serial.println("IGNORE GetCommand() whilst waiting for GoPro");
+#endif
+    return (false);
+  }
+#endif
+  
   if (esp32Serial.available() > 0)
   {
 #if DEBUG_OUTPUT
