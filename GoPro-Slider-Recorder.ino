@@ -150,21 +150,11 @@ void setup(void) {
 
   delay(1000);
 
-#if 0
-  // Wait for 'X' from GoPro Video and Phone Controller
-  while (true)
+  while (esp32Serial.available() == 0)
   {
-    if (esp32Serial.available() > 0)
-    {
-      char cChar = esp32Serial.read();
-      if (cChar == 'X')
-      {
-        esp32Serial.print('Y');
-      }
-    }
+    ;
   }
-#endif
-  
+  char cChar = esp32Serial.read();
 
   SendString_ble_F(F("\n\n"));
   SendString_ble_F(F(PROGRAM));
