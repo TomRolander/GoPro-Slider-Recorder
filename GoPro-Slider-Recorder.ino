@@ -20,7 +20,7 @@
  **************************************************************************/
 
 #define PROGRAM "GoPro Slider Recorder"
-#define VERSION "Ver 0.9 2022-03-30"
+#define VERSION "Ver 0.9 2022-04-03"
 
 #define DEBUG_OUTPUT 1
 
@@ -109,6 +109,7 @@ char sRecordingTime[32] = RECORDING_TIME_5_SEC_STRING;
 static int iShowCommand = true;
 
 static int iGoProEnabled = true;
+static bool bGoProDisabled = false;
 
 
 static char sExecuteScript[128] = "";
@@ -156,6 +157,11 @@ void setup(void) {
   }
   char cChar = esp32Serial.read();
 
+  if (cChar != 'Y')
+  {
+    iGoProEnabled = false;
+    bGoProDisabled = true;
+  }
   SendString_ble_F(F("\n\n"));
   SendString_ble_F(F(PROGRAM));
   SendString_ble_F(F("\n"));
@@ -259,6 +265,11 @@ void loop(void)
           break;
 
         case 5:
+          if (bGoProDisabled)
+          {
+            SendString_ble_F(F("GoPro disabled at startup!\n"));
+            break;
+          }
           SendString_ble_F(F("Enable GoPro\n"));
 #if DEBUG_OUTPUT
           Serial.println(F("Enable GoPro"));
