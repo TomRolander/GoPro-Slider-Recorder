@@ -41,7 +41,8 @@
 #include <SoftwareSerial.h>
 #include <Adafruit_MotorShield.h>
 
-SoftwareSerial y_axisSerial(3, 2);
+//SoftwareSerial y_axisSerial(3, 2);
+SoftwareSerial y_axisSerial(5, 4);
 
 SoftwareSerial esp32Serial(6, 7);
 
