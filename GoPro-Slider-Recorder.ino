@@ -42,7 +42,12 @@
 #include <Adafruit_MotorShield.h>
 
 //SoftwareSerial y_axisSerial(3, 2);
-SoftwareSerial y_axisSerial(5, 4);
+
+// Veronica's
+//SoftwareSerial y_axisSerial(5, 4);
+
+// Kathi's
+SoftwareSerial y_axisSerial(4, 5);
 
 SoftwareSerial esp32Serial(6, 7);
 
