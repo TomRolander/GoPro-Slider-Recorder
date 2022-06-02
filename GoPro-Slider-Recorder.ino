@@ -606,7 +606,9 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
   }
 #if 1
   // do single steps in the forward or backward directions
-  motor->step(iVal, iDirection, SINGLE);
+  
+////  motor->step(iVal, iDirection, SINGLE);
+  motor->step(iVal, iDirection, MICROSTEP);
   motor->release();
 #else
   for (int i = 0; i < iVal; i++)
