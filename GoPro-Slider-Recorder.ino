@@ -163,11 +163,13 @@ void setup(void) {
   }
   char cChar = esp32Serial.read();
 
+#if 0
   if (cChar != 'Y')
   {
-    iGoProEnabled = false;
-    bGoProDisabled = true;
+    iGoProEnabled = true;
+    bGoProDisabled = false;
   }
+#endif
   SendString_ble_F(F("\n\n"));
   SendString_ble_F(F(PROGRAM));
   SendString_ble_F(F("\n"));
