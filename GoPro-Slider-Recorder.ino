@@ -1046,10 +1046,13 @@ void DoJoystick()
   int iSW;
   int iVX;
   int iVY;
-  
-  GetJoystick();
-  GetJoystick();
-  GetJoystick();
+
+  while (true)
+  {
+    GetJoystick(&iSW, &iVX, &iVY);
+    if (iSW == 0)
+      break;
+  }  
   return;
   
 #if 0
@@ -1065,7 +1068,7 @@ void DoJoystick()
 }
 
 //bool GetJoystick(/*char *tmpbuffer, bool bDisplay*/)
-void GetJoystick()
+void GetJoystick(int *iSW, int *iVX, int *iVY)
 {
   
   // clear buffer
@@ -1100,6 +1103,41 @@ void GetJoystick()
     SendString_ble(tmpbuffer);
     SendString_ble_F(F("\n"));
   }
+
+    *iSW = 0;
+    *iVX = 0;
+    *iVY = 0;
+
+    char *ptr, *ptr1;
+    
+    ptr = strstr(tmpbuffer, "SW=");
+    ptr1 = 0;
+    if (ptr != 0)
+      ptr1 = strstr(ptr, ",");    
+    if (ptr != 0 &&
+        ptr1 != 0)
+    {
+      *ptr1 = '\0';
+      *iSW = atoi(&ptr[3]);
+      *ptr1 = ',';
+    }
+    ptr = strstr(tmpbuffer, "VX=");
+    ptr1 = 0;
+    if (ptr != 0)
+      ptr1 = strstr(ptr, ",");    
+    if (ptr != 0 &&
+        ptr1 != 0)
+    {
+      *ptr1 = '\0';
+      *iVX = atoi(&ptr[3]);
+      *ptr1 = ',';
+    }
+    ptr = strstr(tmpbuffer, "VY=");
+    if (ptr != 0)
+    {
+      *iVY = atoi(&ptr[3]);
+    }
+
   return (true);
 }
 
