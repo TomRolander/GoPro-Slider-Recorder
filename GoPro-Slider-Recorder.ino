@@ -401,6 +401,15 @@ void loop(void)
 #endif
           break;
 
+        case 16:
+#if DEBUG_OUTPUT
+          Serial.print(F("Joystick"));
+#endif
+          SendString_ble_F(F("Joystick:\n"));
+          DoJoystick();
+          //GetJoystick();
+          break;
+
         case 99:  // Abort Recording cells
 #if DEBUG_OUTPUT
           Serial.print(F("*** ABORT ***\n"));
@@ -1032,6 +1041,68 @@ bool GetNTP(char *buffer, bool bDisplay)
   return (false);
 }
 
+void DoJoystick()
+{
+  int iSW;
+  int iVX;
+  int iVY;
+  
+  GetJoystick();
+  GetJoystick();
+  GetJoystick();
+  return;
+  
+#if 0
+  while (true)
+  {
+//    GetJoystick(tmpbuffer, true);
+    return;
+    
+    if (strstr(tmpbuffer, "SW=0") != 0)
+      break;
+  }
+#endif  
+}
+
+//bool GetJoystick(/*char *tmpbuffer, bool bDisplay*/)
+void GetJoystick()
+{
+  
+  // clear buffer
+  while (esp32Serial.available() != 0)
+  {
+    char cesp32SerialByte = esp32Serial.read();
+  }
+
+  char tmpbuffer[50];
+  tmpbuffer[0] = '\0';
+
+  esp32Serial.print('\x1B');
+  delay(500);
+  esp32Serial.print("J");
+  while (esp32Serial.available() == 0)
+  {
+    ;
+  }
+  int iNmbBytes = esp32Serial.readBytes(tmpbuffer, sizeof(tmpbuffer));
+  tmpbuffer[iNmbBytes] = '\0';
+  //tmpbuffer[19] = '\0';
+#if DEBUG_OUTPUT
+  Serial.print("Joystick string size = ");
+  Serial.println(iNmbBytes);
+  Serial.print("[");
+  Serial.print(tmpbuffer);
+  Serial.println("]");
+#endif
+
+  if (true /*bDisplay*/)
+  {
+    SendString_ble(tmpbuffer);
+    SendString_ble_F(F("\n"));
+  }
+  return (true);
+}
+
 void HelpDisplay()
 {
   if (GetNTP(sCurrentNTP, true) == false)
@@ -1054,6 +1125,7 @@ void HelpDisplay()
   SendString_ble_F(F("  13 Begin recording at start time\n"));
   SendString_ble_F(F("  14 Turn ON daylight time\n"));
   SendString_ble_F(F("  15 Turn OFF daylight time\n"));
+  SendString_ble_F(F("  16 Joystick\n"));
   SendString_ble_F(F("  99 Abort recording cells\n"));
   SendString_ble_F(F("  X= Script ('wrd')\n"));
 }
