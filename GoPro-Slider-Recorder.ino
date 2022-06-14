@@ -402,12 +402,31 @@ void loop(void)
           break;
 
         case 16:
-#if DEBUG_OUTPUT
+#if 0
           Serial.print(F("Joystick"));
 #endif
-          SendString_ble_F(F("Joystick:\n"));
+          SendString_ble_F(F("Joystick: Push button to Finish\n"));
           DoJoystick();
           //GetJoystick();
+          break;
+
+        case 17:
+#if 0
+          Serial.print(F("Position:"));
+#endif
+          SendString_ble_F(F("Position: "));
+          SendString_ble_F(F("X="));
+          SendInt_ble(iXaxis);
+          SendString_ble_F(F(" Y="));
+          SendInt_ble(iYaxis);
+          SendString_ble_F(F("\n"));
+          break;
+
+        case 88:  // Show addtional commands
+#if 0
+          Serial.print(F("Additional commands:\n"));
+#endif
+          AdditionalCommandsDisplay();
           break;
 
         case 99:  // Abort Recording cells
@@ -477,6 +496,22 @@ void loop(void)
         iWellplate = iNextWellplate;
         iWellplateCell = iNextWellplateCell;
       }
+    }
+    else if (chCommand == 'X' && isDigit(esp32SerialBuffer[1]) && isDigit(esp32SerialBuffer[2]) && isDigit(esp32SerialBuffer[3]))
+    {
+      iSteps = (esp32SerialBuffer[1] - '0') * 100;
+      iSteps += (esp32SerialBuffer[2] - '0') * 10;
+      iSteps += (esp32SerialBuffer[3] - '0');
+
+      GoProMove(iSteps, iYaxis, true);
+    }
+    else if (chCommand == 'Y' && isDigit(esp32SerialBuffer[1]) && isDigit(esp32SerialBuffer[2]) && isDigit(esp32SerialBuffer[3]))
+    {
+      iSteps = (esp32SerialBuffer[1] - '0') * 100;
+      iSteps += (esp32SerialBuffer[2] - '0') * 10;
+      iSteps += (esp32SerialBuffer[3] - '0');
+
+      GoProMove(iXaxis, iSteps, true);
     }
     else if (chCommand == 'X' && esp32SerialBuffer[1] == '=')
     {
@@ -653,7 +688,7 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
     // disables listening for esp32
     y_axisSerial.listen();
 
-#if DEBUG_OUTPUT
+#if 0
     Serial.print("Wait for completion = ");
 #endif
 
@@ -666,7 +701,7 @@ void GoProMove(int iNextXaxis, int iNextYaxis, int iWait)
     }
 
     char cYaxisByte = y_axisSerial.read();
-#if DEBUG_OUTPUT
+#if 0
     Serial.println(cYaxisByte);
     Serial.println("DELAY");
 #endif
@@ -1050,8 +1085,42 @@ void DoJoystick()
   while (true)
   {
     GetJoystick(&iSW, &iVX, &iVY);
+
     if (iSW == 0)
       break;
+
+    int iXaxisNext = iXaxis;
+    int iYaxisNext = iYaxis;
+    
+    if (iVY >= 3000)
+    {
+      if (iXaxis < 720)
+      {
+        iXaxisNext = iXaxis + 1;
+      }
+    }
+    if (iVY <= 1000)
+    {
+      if (iXaxis > 0)
+        iXaxisNext = iXaxis - 1;
+    }
+
+    if (iVX >= 3000)
+    {
+      if (iYaxis < 720)
+      {
+        iYaxisNext = iYaxis + 1;
+      }
+    }
+    if (iVX <= 1000)
+    {
+      if (iYaxis > 0)
+        iYaxisNext = iYaxis - 1;
+    }
+    
+    
+    GoProMove(iXaxisNext, iYaxisNext, false);
+  
   }  
   return;
   
@@ -1081,7 +1150,7 @@ void GetJoystick(int *iSW, int *iVX, int *iVY)
   tmpbuffer[0] = '\0';
 
   esp32Serial.print('\x1B');
-  delay(500);
+  //delay(500);
   esp32Serial.print("J");
   while (esp32Serial.available() == 0)
   {
@@ -1090,7 +1159,7 @@ void GetJoystick(int *iSW, int *iVX, int *iVY)
   int iNmbBytes = esp32Serial.readBytes(tmpbuffer, sizeof(tmpbuffer));
   tmpbuffer[iNmbBytes] = '\0';
   //tmpbuffer[19] = '\0';
-#if DEBUG_OUTPUT
+#if 0
   Serial.print("Joystick string size = ");
   Serial.println(iNmbBytes);
   Serial.print("[");
@@ -1098,7 +1167,7 @@ void GetJoystick(int *iSW, int *iVX, int *iVY)
   Serial.println("]");
 #endif
 
-  if (true /*bDisplay*/)
+  if (false /*bDisplay*/)
   {
     SendString_ble(tmpbuffer);
     SendString_ble_F(F("\n"));
@@ -1141,6 +1210,15 @@ void GetJoystick(int *iSW, int *iVX, int *iVY)
   return (true);
 }
 
+void SendInt_ble(int ival)
+{
+  char sVal[4] = "000";
+  sVal[0] += (ival/100);  
+  sVal[1] += ((ival/10) % 10);  
+  sVal[2] += (ival % 10);
+  SendString_ble(sVal);  
+}
+
 void HelpDisplay()
 {
   if (GetNTP(sCurrentNTP, true) == false)
@@ -1164,6 +1242,15 @@ void HelpDisplay()
   SendString_ble_F(F("  14 Turn ON daylight time\n"));
   SendString_ble_F(F("  15 Turn OFF daylight time\n"));
   SendString_ble_F(F("  16 Joystick\n"));
+  SendString_ble_F(F("  17 Show position\n"));
+  SendString_ble_F(F("  88 Show additional commands\n"));
   SendString_ble_F(F("  99 Abort recording cells\n"));
   SendString_ble_F(F("  X= Script ('wrd')\n"));
+}
+
+void AdditionalCommandsDisplay()
+{
+  SendString_ble_F(F("\nAdditional Commands:\n"));
+  SendString_ble_F(F("  Fxxx Move forward xxx steps in Y\n"));
+  SendString_ble_F(F("  Bxxx Move backward xxx steps in Y\n"));
 }
