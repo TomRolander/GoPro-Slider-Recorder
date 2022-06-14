@@ -69,6 +69,9 @@ static char sCurrentNTP[20] = "";
 static int iSteps = 0;
 static int index = 0;
 
+static int iTimelapseMinutes = 0;
+static int iTimelapseLoops = 0;
+
 static int iXaxis = 0;
 static int iYaxis = 0;
 static int iWellplate = 1;
@@ -256,11 +259,31 @@ void loop(void)
 #if DEBUG_OUTPUT
             Serial.println(F("Start recording cells"));
 #endif
-            int iRetCode;
-            if (strlen(sExecuteWellplateScript) != 0)
-              iRetCode = ExecuteWellplateScript();
-            else
-              iRetCode = ExecuteRecordingScript();
+            int iLoop;
+            for (iLoop = 0; iLoop <= iTimelapseLoops; iLoop++)
+            {
+              int iRetCode;
+              if (strlen(sExecuteWellplateScript) != 0)
+                iRetCode = ExecuteWellplateScript();
+              else
+                iRetCode = ExecuteRecordingScript();
+
+              if (iTimelapseLoops > 0 &&
+                  iLoop != (iTimelapseLoops-1))
+              {
+                long lDelay = 1000L * 60L * (long) iTimelapseMinutes;
+Serial.print("Delay milliseconds = ");
+Serial.println(lDelay);
+                SendString_ble_F(F("Timelapse delay "));
+                SendInt_ble(iTimelapseMinutes);
+                SendString_ble_F(F(" Mins, "));
+                SendInt_ble(iLoop+1);
+                SendString_ble_F(F(" of "));
+                SendInt_ble(iTimelapseLoops);
+                SendString_ble_F(F("\n"));
+                delay(lDelay);
+              }
+            }
           }
           break;
 
@@ -684,6 +707,30 @@ void loop(void)
       if (i >= 10)
         SendString_ble_F(F("Point not defined!\n"));
     }    
+    else if (chCommand == 'T' && esp32SerialBuffer[1] == '=') 
+    {
+      if (isDigit(esp32SerialBuffer[2]) &&
+          isDigit(esp32SerialBuffer[3]) &&
+          isDigit(esp32SerialBuffer[4]) &&
+          (esp32SerialBuffer[5] == ',') &&
+          isDigit(esp32SerialBuffer[6]) &&
+          isDigit(esp32SerialBuffer[7]) &&
+          isDigit(esp32SerialBuffer[8]))
+      {
+        iTimelapseMinutes = (esp32SerialBuffer[2] - '0') * 100;
+        iTimelapseMinutes += (esp32SerialBuffer[3] - '0') * 10;
+        iTimelapseMinutes += (esp32SerialBuffer[4] - '0');
+        iTimelapseLoops = (esp32SerialBuffer[6] - '0') * 100;
+        iTimelapseLoops += (esp32SerialBuffer[7] - '0') * 10;
+        iTimelapseLoops += (esp32SerialBuffer[8] - '0');
+        
+        SendString_ble_F(F("Timelapse processed OK\n"));
+      }
+      else
+      {
+        SendString_ble_F(F("Timelapse incorrect\n"));        
+      }
+    }
     else
     {
       bUnrecognizedCommand = true;
@@ -1144,7 +1191,7 @@ int ExecuteWellplateScript()
     SmartPhoneDisconnect();
   }
 
-  SmartPhoneMove(WellplatesCoords[0].x, WellplatesCoords[0].y, true);
+  SmartPhoneMove(WellplatesCoords[0].x, WellplatesCoords[0].y, false);
   iWellplate = 1;
   iWellplateCell = 1;
 
@@ -1282,7 +1329,7 @@ int ExecuteRecordingScript()
     SmartPhoneDisconnect();
   }
 
-  SmartPhoneMove(0, 0, true);
+  SmartPhoneMove(0, 0, false);
 
   return (1);
 }
@@ -1598,4 +1645,5 @@ void AdditionalCommandsDisplay()
   SendString_ble_F(F("  Gxx Move to point xx\n"));
   SendString_ble_F(F("  Sxx Show position of point xx\n"));
   SendString_ble_F(F("  R=xx,xx,xx Record at point xx,xx,...\n"));
+  SendString_ble_F(F("  T=xxx,xxx delay xxx mins, loop xxx times\n"));
 }
